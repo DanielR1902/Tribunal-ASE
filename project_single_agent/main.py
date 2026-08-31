@@ -35,7 +35,7 @@ from common.personas import ADVOCATE_PERSONAS, JUDGE_PERSONAS  # noqa: E402
 
 load_dotenv(REPO_ROOT / ".env")
 
-DEFAULT_MODEL = "gemini-3.5-flash"
+DEFAULT_MODEL = "gemini-3.6-flash"
 ARCHITECTURE_MODE = "single_agent"
 
 

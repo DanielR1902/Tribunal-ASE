@@ -22,6 +22,7 @@ westeros_tribunal/
 ├── .env.example
 ├── requirements.txt
 ├── README.md
+├── app.py                   # Streamlit GUI — run/inspect both architectures from the browser
 ├── common/
 │   ├── __init__.py
 │   ├── case_data.py        # Canonical facts, charge sheet, tribunal issue
@@ -65,7 +66,24 @@ westeros_tribunal/
    | `ILS_PER_USD`    | `3.65`                | USD → ILS exchange rate used for reporting |
    | `COURT_DB_PATH`  | `court_runs.db`       | SQLite file location (repo root by default)|
 
-## Running the simulations
+## Running the GUI (Streamlit)
+
+The easiest way to use this project is the browser-based GUI:
+
+```bash
+streamlit run app.py
+```
+
+This opens a page with two buttons — **Run Single-Agent Simulation** and
+**Run Multi-Agent Simulation** — a live view of the prosecution/defense
+arguments, a card per judge with their reasoning and a color-coded
+Justified/Not Justified badge, a majority-rule final outcome, a budget
+summary (execution time, token breakdown, cost in USD/ILS), and a
+**Historical Runs** tab that reads `court_runs.db` so you can browse and
+re-inspect any past deliberation, from either architecture, without
+re-running it.
+
+## Running the simulations (command line)
 
 From the repository root (`westeros_tribunal/`):
 

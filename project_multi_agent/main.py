@@ -34,7 +34,7 @@ from project_multi_agent.orchestrator import TribunalOrchestrator, TribunalResul
 
 load_dotenv(REPO_ROOT / ".env")
 
-DEFAULT_MODEL = "gemini-3.5-flash"
+DEFAULT_MODEL = "gemini-3.6-flash"
 ARCHITECTURE_MODE = "multi_agent"
 
 
