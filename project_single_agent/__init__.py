@@ -1,1 +1,1 @@
-"""Single-agent (monolithic prompt) architecture for the Westeros Tribunal."""
+"""Single-agent (monolithic prompt) architecture for the Tribunal simulation."""

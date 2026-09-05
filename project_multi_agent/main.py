@@ -1,4 +1,4 @@
-"""Multi-Agent architecture for the Westeros Tribunal simulation.
+"""Multi-Agent architecture for the Tribunal simulation.
 
 Four dedicated AdvocateAgent instances and three dedicated JudgeAgent
 instances each make their own independent OpenRouter call, coordinated by

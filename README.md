@@ -1,4 +1,4 @@
-# Westeros Tribunal
+# Tribunal
 
 A fictional-legal simulation used to compare two LLM agent architectures —
 **single-agent** (one monolithic prompt) vs. **multi-agent** (dedicated
@@ -19,7 +19,7 @@ schools of thought, not statements about any real jurist's actual views.
 ## Project structure
 
 ```
-westeros_tribunal/
+tribunal/
 ├── .env.example
 ├── requirements.txt
 ├── README.md
@@ -65,7 +65,7 @@ westeros_tribunal/
    |--------------------------|------------------------------|-------------------------------------------------------|
    | `OPENROUTER_MODEL`       | `google/gemini-2.5-flash`   | Which OpenRouter model both architectures call         |
    | `OPENROUTER_SITE_URL`    | a placeholder repo URL       | Sent as `HTTP-Referer` for OpenRouter attribution      |
-   | `OPENROUTER_SITE_NAME`   | `Westeros Tribunal Simulation` | Sent as `X-Title` for OpenRouter attribution         |
+   | `OPENROUTER_SITE_NAME`   | `Tribunal Simulation`         | Sent as `X-Title` for OpenRouter attribution           |
    | `ILS_PER_USD`            | `3.65`                        | USD → ILS exchange rate used for reporting             |
    | `COURT_DB_PATH`          | `court_runs.db`               | SQLite file location (repo root by default)            |
 
@@ -88,7 +88,7 @@ re-running it.
 
 ## Running the simulations (command line)
 
-From the repository root (`westeros_tribunal/`):
+From the repository root:
 
 ```bash
 # Single-agent architecture: one monolithic structured-output call

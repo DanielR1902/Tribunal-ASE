@@ -1,4 +1,4 @@
-"""Single-Agent architecture for the Westeros Tribunal simulation.
+"""Single-Agent architecture for the Tribunal simulation.
 
 A single OpenRouter call is asked to play every advocate and every judge at
 once, and to return the entire result as one structured (Pydantic-validated)

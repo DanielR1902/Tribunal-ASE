@@ -1,4 +1,4 @@
-"""Streamlit GUI for the Westeros Tribunal simulation.
+"""Streamlit GUI for the Tribunal simulation.
 
 Lets a user trigger a Single-Agent or Multi-Agent run from the browser,
 watch the deliberation render live, and browse past runs logged in
@@ -311,11 +311,11 @@ def render_sidebar() -> tuple[str | None, str | None, bool]:
     random_mode = selection_mode == "Random per run"
 
     if random_mode:
+        # Deliberately no dropdown and no list of candidate engines here —
+        # the whole point of "Random per run" is that the user doesn't know
+        # (and isn't shown) which engine will answer until after the run.
         model: str | None = None
-        st.sidebar.caption("A model will be picked at random from the pool below when you click Run.")
-        with st.sidebar.expander("Model pool"):
-            for m in MODEL_POOL:
-                st.caption(f"• `{m}`")
+        st.sidebar.caption("An engine will be picked at random when you click Run.")
     else:
         model = st.sidebar.selectbox(
             "OpenRouter model",

@@ -85,8 +85,8 @@ RETRYABLE_API_ERRORS: tuple[type[Exception], ...] = (
 
 # Shown to OpenRouter for attribution/analytics only; override in .env if
 # you want your own app identified instead of these placeholders.
-SITE_URL = os.getenv("OPENROUTER_SITE_URL", "https://github.com/westeros-tribunal")
-SITE_NAME = os.getenv("OPENROUTER_SITE_NAME", "Westeros Tribunal Simulation")
+SITE_URL = os.getenv("OPENROUTER_SITE_URL", "https://github.com/tribunal-simulation")
+SITE_NAME = os.getenv("OPENROUTER_SITE_NAME", "Tribunal Simulation")
 
 # Per-call completion token caps, enforced on every OpenRouter chat call so
 # briefs/opinions stay short and rapid regardless of which model in

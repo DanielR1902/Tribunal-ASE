@@ -1,4 +1,4 @@
-"""SQLite persistence layer for the Westeros Tribunal simulation.
+"""SQLite persistence layer for the Tribunal simulation.
 
 Both architectures write exactly one row per run into the ``trial_runs``
 table of ``court_runs.db``, tagged with ``architecture_mode`` so that
