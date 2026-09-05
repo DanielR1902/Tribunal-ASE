@@ -65,6 +65,24 @@ TRIBUNAL_SCOPE: str = (
     "judges disagree with one another."
 )
 
+# The standing case theory each side argues from, shown as a static outline
+# in the "Canonical Case Facts" section regardless of whether any run has
+# happened yet — distinct from the AI-generated prose summaries a specific
+# run produces.
+PROSECUTION_ARGUMENTS: list[str] = [
+    "Unlawful assassination.",
+    "Breach of allegiance.",
+    "Lack of formal judicial authority.",
+    "Absence of immediate lethal threat at the exact moment of the strike.",
+    "Failure to attempt detention.",
+]
+
+DEFENSE_ARGUMENTS: list[str] = [
+    "Defense of necessity and defense of others.",
+    "Prevention of mass future atrocities following the burning of King's Landing.",
+    "Absence of any feasible lawful alternative to halt an absolute monarch commanding a dragon.",
+]
+
 
 def get_case_briefing() -> str:
     """Render the canonical case file as a single briefing block of text.

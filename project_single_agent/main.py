@@ -30,11 +30,16 @@ from common import case_data  # noqa: E402
 from common.cost_tracker import CostTracker, get_ils_exchange_rate  # noqa: E402
 from common.database import TrialRunRecord, init_db, log_trial_run  # noqa: E402
 from common.llm_client import (  # noqa: E402
+    JSON_OBJECT_RESPONSE_FORMAT,
+    SINGLE_AGENT_MAX_TOKENS,
     USAGE_ACCOUNTING_EXTRA_BODY,
     build_schema_instructions,
+    create_chat_completion,
+    extract_finish_reason,
     extract_usage,
     get_client,
     get_model,
+    parse_json_response,
 )
 from common.personas import ADVOCATE_PERSONAS, JUDGE_PERSONAS  # noqa: E402
 
@@ -51,8 +56,13 @@ Verdict = Literal["Justified", "Not Justified"]
 
 
 class JudgeOpinion(BaseModel):
-    reasoning: str
+    # "verdict" is declared FIRST (and build_schema_instructions() embeds
+    # this same field order in the schema shown to the model) so that even
+    # if the single monolithic call gets cut off by the token limit
+    # partway through a judge's "reasoning", that judge's verdict — the
+    # one field that must never be lost — has already been written.
     verdict: Verdict
+    reasoning: str
 
 
 class TribunalVerdict(BaseModel):
@@ -81,7 +91,8 @@ def build_prompt() -> str:
 
     return f"""You are simulating a full tribunal proceeding in a single pass. You must
 internally role-play FOUR advocates and THREE judges, then output only the
-combined result of that internal deliberation.
+combined result of that internal deliberation, written as formal, concise
+legal writing — NOT theatrical monologues or narrative roleplay.
 
 {case_briefing}
 
@@ -103,22 +114,35 @@ means the three verdicts disagree with each other:
 
 YOUR TASK, in this exact order:
 1. Have Daenerys Targaryen and Grey Worm jointly make the strongest
-   prosecution case against Jon Snow, then produce "prosecution_summary": a
-   faithful prose summary (not a transcript) of their combined argument,
-   written in third person, at least three sentences.
+   prosecution case against Jon Snow, then produce "prosecution_summary" as
+   a formal legal brief of AT MOST 200 WORDS, written in third person,
+   structured as exactly: Core Legal Claim (one line naming the controlling
+   legal theory, e.g. "Absence of Imminent Peril" or "Extrajudicial
+   Execution"), Supporting Agreed Facts (3 to 4 bulleted points), and a
+   one-sentence Concluding Plea. No rhetorical flourish or repetition.
 2. Have Jon Snow and Tyrion Lannister jointly make the strongest defense of
-   Jon Snow's actions, then produce "defense_summary": a faithful prose
-   summary of their combined argument, written in third person, at least
-   three sentences.
+   Jon Snow's actions, then produce "defense_summary" in the SAME format
+   and length limit as above (Core Legal Claim / Supporting Agreed Facts /
+   Concluding Plea, at most 200 words), written in third person.
 3. Have Judge Barak apply his four-fold purposive/proportionality scrutiny
-   to the tribunal issue and produce his own "reasoning" (step-by-step, in
-   his own voice and method) and independent "verdict".
+   to the tribunal issue, decide his verdict FIRST, then produce his own
+   "reasoning" to justify it — at most 120 words, structured as exactly:
+   Legal Standard Applied (one line), then Application to the Agreed Facts
+   (2 to 3 bulleted points), then Verdict Rationale (one sentence).
 4. Have Judge Elon apply his tradition-grounded, modesty-constrained method
-   to the SAME tribunal issue and produce his own "reasoning" and
-   independent "verdict", reached entirely on his own terms.
+   to the SAME tribunal issue in the SAME concise structure and length
+   limit, and produce his own "reasoning" and independent "verdict", reached
+   entirely on his own terms.
 5. Have Judge Shamgar apply his institutional-competence, rule-of-law method
-   to the SAME tribunal issue and produce his own "reasoning" and
-   independent "verdict", reached entirely on his own terms.
+   to the SAME tribunal issue in the SAME concise structure and length
+   limit, and produce his own "reasoning" and independent "verdict", reached
+   entirely on his own terms.
+
+OUTPUT FIELD ORDER (critical): within each judge's object (judge_barak,
+judge_elon, judge_shamgar), write "verdict" as the FIRST field, followed by
+"reasoning" as the second field — this way every judge's verdict is already
+recorded even if the response gets cut off before a later judge's
+"reasoning" finishes.
 
 Return ONLY the structured result matching the required schema. Do not
 merge the three judges' verdicts into a consensus; report each independently
@@ -204,16 +228,22 @@ def main() -> None:
     print(f"Running {case_data.CASE_ID} — single-agent architecture (model: {model})...")
 
     start = time.perf_counter()
-    response = client.chat.completions.create(
+    response = create_chat_completion(
+        client,
         model=model,
         messages=[{"role": "user", "content": build_prompt()}],
-        response_format={"type": "json_object"},
+        response_format=JSON_OBJECT_RESPONSE_FORMAT,
         temperature=0.7,
+        max_tokens=SINGLE_AGENT_MAX_TOKENS,
         extra_body=USAGE_ACCOUNTING_EXTRA_BODY,
     )
     execution_time = time.perf_counter() - start
 
-    verdict = TribunalVerdict.model_validate_json(response.choices[0].message.content or "")
+    verdict = parse_json_response(
+        response.choices[0].message.content or "",
+        TribunalVerdict,
+        finish_reason=extract_finish_reason(response),
+    )
 
     prompt_tokens, completion_tokens, actual_cost, executed_model = extract_usage(response)
     tracker.record(

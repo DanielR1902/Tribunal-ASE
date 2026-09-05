@@ -21,10 +21,8 @@ from dataclasses import dataclass, field
 # "tiers" entry charge a higher rate once the prompt crosses the given token
 # threshold (Gemini 2.5 Pro's long-context tier); models without "tiers"
 # charge a flat rate. Only used when OpenRouter doesn't report actual cost.
-# Covers both the original Gemini defaults and the diverse random-selection
-# pool in common/llm_client.py's MODEL_POOL. ``openrouter/auto`` has no
-# single price (it routes to a different concrete model per request) so it
-# intentionally has no entry here and falls back to DEFAULT_PRICING.
+# Covers every model in common/llm_client.py's MODEL_POOL, plus a couple of
+# other Gemini variants kept for OPENROUTER_MODEL overrides.
 PRICING_USD_PER_MILLION_TOKENS: dict[str, dict] = {
     "google/gemini-2.5-flash": {
         "input": 0.30,
@@ -43,9 +41,9 @@ PRICING_USD_PER_MILLION_TOKENS: dict[str, dict] = {
             "output_above": 15.00,
         },
     },
-    "anthropic/claude-3.5-sonnet": {
-        "input": 3.00,
-        "output": 15.00,
+    "anthropic/claude-3.5-haiku": {
+        "input": 0.80,
+        "output": 4.00,
     },
     "openai/gpt-4o-mini": {
         "input": 0.15,
@@ -55,15 +53,11 @@ PRICING_USD_PER_MILLION_TOKENS: dict[str, dict] = {
         "input": 0.12,
         "output": 0.30,
     },
-    "mistralai/mistral-large-2407": {
-        "input": 2.00,
-        "output": 6.00,
-    },
 }
 
-# Fallback used for any model name not found above (e.g. openrouter/auto, or
-# a future model the user points OPENROUTER_MODEL at). Kept deliberately
-# close to Gemini Flash pricing.
+# Fallback used for any model name not found above (e.g. a value the user
+# points OPENROUTER_MODEL at directly). Kept deliberately close to Gemini
+# Flash pricing.
 DEFAULT_PRICING = {"input": 0.30, "output": 2.50}
 
 DEFAULT_ILS_PER_USD = 3.65
@@ -133,8 +127,8 @@ class CostTracker:
         used as-is instead of the estimated pricing table. Pass
         ``executed_model`` (also from ``extract_usage``) when known — the
         concrete model that actually served this call, which can differ from
-        ``self.model`` (the requested model) when that's a meta-router like
-        ``openrouter/auto``.
+        ``self.model`` (the originally requested model) when
+        ``create_chat_completion`` had to fall back after a 404.
         """
         prompt_tokens = int(prompt_tokens or 0)
         completion_tokens = int(completion_tokens or 0)
@@ -179,10 +173,11 @@ class CostTracker:
         """The exact model(s) OpenRouter actually executed this run's calls on.
 
         A single concrete requested model normally resolves to itself for
-        every call. ``openrouter/auto`` (or "Random per run" landing on it)
-        can resolve different calls to different underlying models, in which
-        case this reports every distinct one — see the per-call breakdown for
-        which call ran on which model.
+        every call. If one or more calls 404'd and fell back to
+        ``FALLBACK_MODEL`` (see ``create_chat_completion``) while others
+        succeeded on the originally requested model, this reports every
+        distinct one — see the per-call breakdown for which call ran on
+        which model.
         """
         executed = sorted({c.executed_model for c in self.calls if c.executed_model})
         if not executed:

@@ -23,11 +23,16 @@ from common import case_data
 from common.cost_tracker import CostTracker, get_ils_exchange_rate
 from common.database import TrialRunRecord, get_db_path, init_db, log_trial_run
 from common.llm_client import (
+    JSON_OBJECT_RESPONSE_FORMAT,
     MODEL_POOL,
+    SINGLE_AGENT_MAX_TOKENS,
     USAGE_ACCOUNTING_EXTRA_BODY,
+    create_chat_completion,
+    extract_finish_reason,
     extract_usage,
     get_client,
     get_model,
+    parse_json_response,
     pick_random_model,
 )
 from common.personas import JUDGE_ORDER, JUDGE_PERSONAS
@@ -61,16 +66,22 @@ def run_single_agent(api_key: str, model: str) -> dict:
     tracker = CostTracker(model=model)
 
     start = time.perf_counter()
-    response = client.chat.completions.create(
+    response = create_chat_completion(
+        client,
         model=model,
         messages=[{"role": "user", "content": build_single_prompt()}],
-        response_format={"type": "json_object"},
+        response_format=JSON_OBJECT_RESPONSE_FORMAT,
         temperature=0.7,
+        max_tokens=SINGLE_AGENT_MAX_TOKENS,
         extra_body=USAGE_ACCOUNTING_EXTRA_BODY,
     )
     execution_time = time.perf_counter() - start
 
-    verdict = TribunalVerdict.model_validate_json(response.choices[0].message.content or "")
+    verdict = parse_json_response(
+        response.choices[0].message.content or "",
+        TribunalVerdict,
+        finish_reason=extract_finish_reason(response),
+    )
 
     prompt_tokens, completion_tokens, actual_cost, executed_model = extract_usage(response)
     tracker.record(
@@ -216,9 +227,7 @@ def render_majority_outcome(judges: dict) -> None:
     )
 
 
-def render_budget_box(
-    tracker: CostTracker, execution_time: float, run_id: int, requested_model: str
-) -> None:
+def render_budget_box(tracker: CostTracker, execution_time: float, run_id: int) -> None:
     rate = get_ils_exchange_rate()
     st.subheader("Budget Summary")
     m1, m2, m3, m4 = st.columns(4)
@@ -232,7 +241,7 @@ def render_budget_box(
     d2.metric("Completion tokens", f"{tracker.completion_tokens:,}")
     d3.metric("SQLite Run ID", run_id)
 
-    st.caption(f"Requested model: `{requested_model}`  •  ILS rate used: {rate:.2f}  •  Database: `{get_db_path()}`")
+    st.caption(f"ILS rate used: {rate:.2f}  •  Database: `{get_db_path()}`")
 
     if len(tracker.calls) > 1:
         with st.expander("Per-call token breakdown"):
@@ -240,7 +249,6 @@ def render_budget_box(
                 [
                     {
                         "Agent call": c.label,
-                        "Model executed": c.executed_model,
                         "Prompt tokens": c.prompt_tokens,
                         "Completion tokens": c.completion_tokens,
                         "Total tokens": c.total_tokens,
@@ -257,22 +265,14 @@ def render_result(result: dict) -> None:
     st.markdown(f"### Results — {label} Architecture")
     st.caption("The prosecution's and defense's arguments from this run are shown inside the “Canonical Case Facts” section above.")
 
-    executed = result["executed_model"]
-    requested = result["requested_model"]
-    if executed == requested:
-        st.info(f"🧭 **Model used for this trial:** `{executed}`")
-    else:
-        st.info(
-            f"🧭 **Model used for this trial:** `{executed}`  \n"
-            f"(requested as `{requested}`, resolved by OpenRouter)"
-        )
+    st.markdown(f"**Engine:** `{result['executed_model']}`")
 
     st.subheader("Judicial Deliberation")
     render_judges(result["judges"])
 
     render_majority_outcome(result["judges"])
 
-    render_budget_box(result["tracker"], result["execution_time"], result["run_id"], result["requested_model"])
+    render_budget_box(result["tracker"], result["execution_time"], result["run_id"])
 
 
 # ---------------------------------------------------------------------------
@@ -282,6 +282,8 @@ def render_result(result: dict) -> None:
 def render_sidebar() -> tuple[str | None, str | None, bool]:
     st.sidebar.title("⚖️ Tribunal Controls")
 
+    is_running = st.session_state.get("is_running", False)
+
     api_key = os.getenv("OPENROUTER_API_KEY")
     if not api_key:
         st.sidebar.error("OPENROUTER_API_KEY not found")
@@ -289,6 +291,9 @@ def render_sidebar() -> tuple[str | None, str | None, bool]:
             "Copy `.env.example` to `.env` in the project root and add your "
             "key from https://openrouter.ai/keys, then restart Streamlit."
         )
+
+    if is_running:
+        st.sidebar.warning("🔒 A simulation is running — controls are locked until it finishes.")
 
     st.sidebar.subheader("Model selection")
     selection_mode = st.sidebar.radio(
@@ -298,11 +303,10 @@ def render_sidebar() -> tuple[str | None, str | None, bool]:
         help=(
             "Random per run (default): each time you click a Run button, a "
             "model is drawn at random from a diverse pool spanning several "
-            "providers — including OpenRouter's own openrouter/auto "
-            "meta-router, which dynamically picks a concrete model per "
-            "request server-side. Fixed: always use the model chosen below."
+            "providers. Fixed: always use the model chosen below."
         ),
         label_visibility="collapsed",
+        disabled=is_running,
     )
     random_mode = selection_mode == "Random per run"
 
@@ -317,6 +321,7 @@ def render_sidebar() -> tuple[str | None, str | None, bool]:
             "OpenRouter model",
             options=MODEL_POOL,
             index=MODEL_POOL.index(DEFAULT_MODEL) if DEFAULT_MODEL in MODEL_POOL else 0,
+            disabled=is_running,
         )
 
     st.sidebar.divider()
@@ -333,6 +338,8 @@ def render_sidebar() -> tuple[str | None, str | None, bool]:
 # ---------------------------------------------------------------------------
 
 def render_run_tab(api_key: str | None, model: str | None, random_mode: bool) -> None:
+    is_running = st.session_state.get("is_running", False)
+
     # Reserve the Case Facts slot at the top of the page now, but fill it in
     # further down — after a button click (if any) has updated
     # st.session_state["last_result"] — so a fresh run's arguments show up
@@ -341,31 +348,53 @@ def render_run_tab(api_key: str | None, model: str | None, random_mode: bool) ->
 
     st.markdown("#### Run a Simulation")
     col1, col2 = st.columns(2)
-    run_single_clicked = col1.button("⚖️ Run Single-Agent Simulation", width="stretch")
-    run_multi_clicked = col2.button("🏛️ Run Multi-Agent Simulation", width="stretch")
+    run_single_clicked = col1.button(
+        "⚖️ Run Single-Agent Simulation", width="stretch", disabled=is_running
+    )
+    run_multi_clicked = col2.button(
+        "🏛️ Run Multi-Agent Simulation", width="stretch", disabled=is_running
+    )
 
-    if (run_single_clicked or run_multi_clicked) and not api_key:
+    if is_running:
+        st.info("🔒 A simulation is currently running. Please wait for it to finish.")
+    elif (run_single_clicked or run_multi_clicked) and not api_key:
         st.error("Cannot run: OPENROUTER_API_KEY is not set. See the sidebar for setup instructions.")
-    elif run_single_clicked:
-        active_model = pick_random_model() if random_mode else model
-        if random_mode:
-            st.caption(f"🎲 Randomly selected model for this trial: `{active_model}`")
-        with st.spinner(f"Running single-agent tribunal (1 OpenRouter call, model: {active_model})..."):
-            try:
-                st.session_state["last_result"] = run_single_agent(api_key, active_model)
-            except Exception as exc:  # noqa: BLE001
-                st.error(f"Single-agent run failed: {exc}")
-    elif run_multi_clicked:
-        active_model = pick_random_model() if random_mode else model
-        if random_mode:
-            st.caption(f"🎲 Randomly selected model for this trial: `{active_model}`")
-        with st.spinner(
-            f"Running multi-agent tribunal (7 OpenRouter calls: 4 advocates + 3 judges, model: {active_model})..."
-        ):
-            try:
-                st.session_state["last_result"] = run_multi_agent(api_key, active_model)
-            except Exception as exc:  # noqa: BLE001
-                st.error(f"Multi-agent run failed: {exc}")
+    elif run_single_clicked or run_multi_clicked:
+        # Engage the execution lock and stash which run to perform, then
+        # rerun immediately so the browser sees the controls above as
+        # disabled *before* the (blocking) run actually starts — otherwise
+        # a second click during the run could interrupt it mid-flight.
+        st.session_state["pending_run"] = "single_agent" if run_single_clicked else "multi_agent"
+        st.session_state["pending_model"] = pick_random_model() if random_mode else model
+        st.session_state["is_running"] = True
+        st.rerun()
+
+    pending_run = st.session_state.get("pending_run")
+    if is_running and pending_run:
+        active_model = st.session_state.get("pending_model")
+        try:
+            if pending_run == "single_agent":
+                with st.spinner("Running single-agent tribunal simulation..."):
+                    st.session_state["last_result"] = run_single_agent(api_key, active_model)
+            else:
+                with st.spinner("Running multi-agent tribunal simulation..."):
+                    st.session_state["last_result"] = run_multi_agent(api_key, active_model)
+            st.session_state["run_error"] = None
+        except Exception as exc:  # noqa: BLE001
+            arch_label = "Single-agent" if pending_run == "single_agent" else "Multi-agent"
+            # Stash the error rather than calling st.error() here directly —
+            # the st.rerun() below would wipe it from the screen before the
+            # user ever saw it, since this whole branch's render is discarded.
+            st.session_state["run_error"] = f"{arch_label} run failed: {exc}"
+        finally:
+            st.session_state["is_running"] = False
+            st.session_state["pending_run"] = None
+            st.session_state["pending_model"] = None
+            st.rerun()
+
+    if st.session_state.get("run_error"):
+        st.error(st.session_state["run_error"])
+        st.session_state["run_error"] = None
 
     st.divider()
 
@@ -383,11 +412,19 @@ def render_run_tab(api_key: str | None, model: str | None, random_mode: bool) ->
             st.markdown(f"**Tribunal issue:** {case_data.TRIBUNAL_ISSUE}")
             st.caption(case_data.TRIBUNAL_SCOPE)
 
+            st.divider()
+            st.markdown("**Prosecution Arguments (case theory):**")
+            for point in case_data.PROSECUTION_ARGUMENTS:
+                st.markdown(f"- {point}")
+            st.markdown("**Defense Arguments (case theory):**")
+            for point in case_data.DEFENSE_ARGUMENTS:
+                st.markdown(f"- {point}")
+
             if last_result:
                 st.divider()
-                st.markdown("**Prosecution Arguments**")
+                st.markdown("**Prosecution Arguments (this run's summary):**")
                 st.info(last_result["prosecution_summary"])
-                st.markdown("**Defense Arguments**")
+                st.markdown("**Defense Arguments (this run's summary):**")
                 st.info(last_result["defense_summary"])
 
     if last_result:
@@ -397,6 +434,13 @@ def render_run_tab(api_key: str | None, model: str | None, random_mode: bool) ->
 
 
 def render_history_tab() -> None:
+    if st.session_state.get("is_running", False):
+        st.warning(
+            "🔒 A simulation is currently running. Historical runs are locked "
+            "until it finishes — this avoids interrupting the active run."
+        )
+        return
+
     db_path = init_db()
     conn_str = db_path
 
@@ -416,8 +460,8 @@ def render_history_tab() -> None:
         summary_cols = [
             "id",
             "timestamp",
-            "architecture_mode",
             "model",
+            "architecture_mode",
             "judge_barak_verdict",
             "judge_elon_verdict",
             "judge_shamgar_verdict",
@@ -430,20 +474,20 @@ def render_history_tab() -> None:
 
     st.markdown("#### Inspect a Past Deliberation")
     options = [
-        f"Run #{row.id} — {row.architecture_mode} — {getattr(row, 'model', '') or 'unknown model'} — {row.timestamp}"
+        f"Run #{row.id} — {row.timestamp} — {row.model or 'unknown'} — {row.architecture_mode}"
         for row in df.itertuples()
     ]
     selected = st.selectbox("Select a run", options=options)
     selected_id = int(selected.split("#")[1].split(" ")[0])
     row = df[df["id"] == selected_id].iloc[0]
 
-    st.info(f"🧭 **Model executed for this trial:** `{row['model'] or 'unknown (logged before model tracking was added)'}`")
-
     st.subheader("Prosecution Arguments")
     st.info(row["prosecution_summary"])
 
     st.subheader("Defense Arguments")
     st.info(row["defense_summary"])
+
+    st.markdown(f"**Engine:** `{row['model'] or 'unknown'}`")
 
     st.subheader("Judicial Deliberation")
     judges = {
@@ -474,14 +518,35 @@ def main() -> None:
 
     if "last_result" not in st.session_state:
         st.session_state["last_result"] = None
+    if "is_running" not in st.session_state:
+        st.session_state["is_running"] = False
+    if "pending_run" not in st.session_state:
+        st.session_state["pending_run"] = None
+    if "pending_model" not in st.session_state:
+        st.session_state["pending_model"] = None
+    if "run_error" not in st.session_state:
+        st.session_state["run_error"] = None
 
     api_key, model, random_mode = render_sidebar()
 
-    tab_run, tab_history = st.tabs(["🏟️ Run Simulation", "📚 Historical Runs"])
-    with tab_run:
+    is_running = st.session_state.get("is_running", False)
+
+    if is_running:
+        # st.tabs can't be disabled, and Streamlit renders every tab's
+        # content on every script pass regardless of which one is visually
+        # selected — so a real st.tabs bar would let the user click over to
+        # "Historical Runs" mid-run even though its content is locked. Drop
+        # the tab bar entirely while a run is active so the only thing on
+        # screen is the running simulation view; render_history_tab() also
+        # keeps its own is_running guard as a defense-in-depth backstop.
+        st.markdown("#### 🏟️ Run Simulation")
         render_run_tab(api_key, model, random_mode)
-    with tab_history:
-        render_history_tab()
+    else:
+        tab_run, tab_history = st.tabs(["🏟️ Run Simulation", "📚 Historical Runs"])
+        with tab_run:
+            render_run_tab(api_key, model, random_mode)
+        with tab_history:
+            render_history_tab()
 
 
 if __name__ == "__main__":
