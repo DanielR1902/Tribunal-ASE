@@ -66,34 +66,51 @@ THEME_CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Spectral:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
 :root {
-    --trib-bg: #0f172a;
-    --trib-panel: #131d33;
-    --trib-sidebar: #111a2e;
-    --trib-border: #1e293b;
-    --trib-border-strong: #334155;
-    --trib-border-gold: #78350f;
-    --trib-text: #f8fafc;
-    --trib-text-heading: #f1f5f9;
-    --trib-text-body: #cbd5e1;
-    --trib-text-muted: #94a3b8;
-    --trib-text-dim: #64748b;
+    /* Light theme: mint app background, white card panels, dark-gray text
+       throughout, glacier-blue sidebar. Accent colors below (gold/red/cyan)
+       are darkened from their original dark-mode-tuned values where they're
+       used as foreground TEXT (badges, tab labels), since the original
+       pale/bright variants were chosen for contrast against a dark panel
+       and would be nearly unreadable on the new light one. */
+    --trib-bg: #D8F3DC;
+    --trib-panel: #FFFFFF;
+    --trib-glacier: #96C2DB;
+    --trib-sidebar: var(--trib-glacier);
+    --trib-border: #C8E6C9;
+    --trib-border-strong: #9CC7A6;
+    --trib-border-gold: #B45309;
+    --trib-border-explicit: #1E293B;
+    --trib-mint-table: #D8F3DC;
+    --trib-text: #2B2D42;
+    --trib-text-heading: #2B2D42;
+    --trib-text-body: #2B2D42;
+    --trib-text-muted: #4B5563;
+    --trib-text-dim: #4B5563;
     --trib-gold: #f59e0b;
     --trib-gold-deep: #d97706;
-    --trib-gold-bright: #fbbf24;
-    --trib-gold-pale: #fcd34d;
-    --trib-green: #34d399;
-    --trib-red: #f87171;
-    --trib-red-pale: #fca5a5;
+    --trib-gold-bright: #b45309;
+    --trib-gold-pale: #92400e;
+    --trib-green: #059669;
+    --trib-red: #dc2626;
+    --trib-red-pale: #b91c1c;
     --trib-red-deep: #b91c1c;
-    --trib-cyan: #67e8f9;
+    --trib-cyan: #0e7490;
     --trib-cyan-deep: #0e7490;
+    --trib-emerald: #10B981;
 }
+
+/* Base font size raised ~2 steps (browser default 16px -> 18px); Streamlit
+   sizes most of its own spacing/typography in rem, so this scales the
+   whole app's text consistently rather than needing to size every element
+   individually. */
+html { font-size: 18px; }
 
 .stApp, [data-testid="stAppViewContainer"], [data-testid="stMainBlockContainer"], [data-testid="stHeader"] {
     background: var(--trib-bg) !important;
 }
-.stApp, .stApp p, .stApp li, .stApp label {
-    color: var(--trib-text-body);
+.stApp, .stApp p, .stApp li, .stApp label,
+[data-testid="stMarkdownContainer"] {
+    color: var(--trib-text-body) !important;
     font-family: 'IBM Plex Sans', Helvetica, sans-serif;
 }
 
@@ -103,7 +120,7 @@ h1, h2, h3, h4, .stApp h1, .stApp h2, .stApp h3, .stApp h4 {
     color: var(--trib-text) !important;
     letter-spacing: 0.01em;
 }
-h1 { border-left: 6px solid var(--trib-gold-deep); padding-left: 14px; }
+h1 { border-left: 6px solid var(--trib-gold-deep); padding-left: 14px; font-size: 40px !important; }
 
 .stApp small, [data-testid="stMarkdownContainer"] small {
     font-family: 'IBM Plex Mono', monospace !important;
@@ -123,19 +140,38 @@ h1 { border-left: 6px solid var(--trib-gold-deep); padding-left: 14px; }
 [data-testid="stSidebar"] span {
     color: var(--trib-text-body);
 }
+/* "Tribunal Controls" is an st.sidebar.title() (an <h1>, same tag as the
+   main page title) — sized down from the main title's 40px so it reads as
+   subtler/secondary (without touching the main h1 rule above), and forced
+   to a single line via clamp() + nowrap so it doesn't wrap awkwardly in a
+   narrow sidebar. */
+[data-testid="stSidebar"] h1 {
+    font-size: clamp(20px, 2.2vw, 26px) !important;
+    white-space: nowrap !important;
+    overflow: visible;
+}
 
+/* Primary/secondary buttons: Glacier fill, bold dark text (aligned to the
+   same Glacier tone used for the sidebar / content boxes), sized to 80%
+   width so there's a visible 10% margin on each side — centered in
+   whatever column/container holds them regardless of that container's own
+   width (including one set to width="stretch" from Python). */
+.stButton { text-align: center; }
 .stButton > button {
-    background: linear-gradient(180deg, var(--trib-gold) 0%, var(--trib-gold-deep) 100%) !important;
-    color: #1c1207 !important;
+    background: var(--trib-glacier) !important;
+    color: #1F2937 !important;
+    font-weight: bold !important;
     border: none !important;
     border-radius: 3px !important;
     font-family: 'IBM Plex Sans', sans-serif !important;
-    font-weight: 600 !important;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.25) inset;
+    width: 80% !important;
+    margin: 0 auto !important;
+    display: block !important;
 }
-.stButton > button:hover:not(:disabled) { filter: brightness(1.08); color: #1c1207 !important; }
+.stButton > button:hover:not(:disabled) { filter: brightness(1.08); color: #1F2937 !important; }
 .stButton > button:disabled { background: var(--trib-border-strong) !important; color: var(--trib-text-dim) !important; }
 
 [data-testid="stTabs"] button[role="tab"] {
@@ -153,6 +189,101 @@ h1 { border-left: 6px solid var(--trib-gold-deep); padding-left: 14px; }
     border: 1px solid var(--trib-border) !important;
     border-radius: 3px;
 }
+/* When an expander's content panel is open, give it a Glacier background
+   (aligned with the sidebar/button Glacier tone) with dark-gray text for
+   contrast. Streamlit doesn't expose a per-instance class for st.expander,
+   but it does set the standard HTML `inert` attribute on the content panel
+   while collapsed and removes it while expanded — :not([inert]) reliably
+   targets only the open state. */
+[data-testid="stExpanderDetails"]:not([inert]) {
+    background: var(--trib-glacier) !important;
+    color: var(--trib-text) !important;
+    border-radius: 0 0 3px 3px;
+}
+[data-testid="stExpanderDetails"]:not([inert]) * {
+    color: var(--trib-text) !important;
+}
+
+/* Text boxes / inner content: inside cards, expanders, and the explicitly-
+   bordered detail containers, force a uniform 18px base size. */
+.trib-card, .trib-card *,
+.trib-bordered-box, .trib-bordered-box *,
+[data-testid="stExpanderDetails"], [data-testid="stExpanderDetails"] * {
+    font-size: 18px !important;
+}
+/* Centered by default for cards/bordered-boxes (badges, metric tiles,
+   short labels read fine centered). Expander content — the Agreed Facts /
+   Prosecution / Defense Arguments lists, and any other expander's content
+   — is prose/lists that read better left-aligned; specific overrides
+   below (judge/advocate reasoning text, the Canonical Case Facts summary
+   box) also force left-alignment where centering would hurt readability. */
+.trib-card, .trib-card *,
+.trib-bordered-box, .trib-bordered-box * {
+    text-align: center !important;
+}
+[data-testid="stExpanderDetails"], [data-testid="stExpanderDetails"] * {
+    text-align: left !important;
+}
+
+/* Judge doctrine badge: shrink to fit its long title text cleanly instead
+   of the 18px blanket size above, which caused clipping/overflow. */
+.trib-badge--doctrine {
+    font-size: 13.5px !important;
+    letter-spacing: 0.5px !important;
+}
+
+/* Judge/advocate reasoning & argument body text: left-aligned prose with
+   comfortable line-height and a touch of indentation, overriding the
+   centered default above — center-aligned multi-line reasoning text
+   (Legal Standard Applied / Application to Agreed Facts / Verdict
+   Rationale) is hard to read. */
+.trib-card-body, .trib-card-body * {
+    text-align: left !important;
+    line-height: 1.6 !important;
+    padding-left: 4px;
+}
+
+/* Judge verdict text (JUSTIFIED / NOT JUSTIFIED): bold and a touch larger
+   than the surrounding metadata so the determination itself stands out. */
+.trib-verdict-text {
+    font-weight: 700 !important;
+    font-size: 16px !important;
+}
+
+/* Canonical Case Facts' bordered summary box: left-aligned throughout
+   (overrides the centered card/bordered-box default above), since it's
+   full sentences and labeled fields, not short centered labels. */
+.trib-case-facts, .trib-case-facts * {
+    text-align: left !important;
+}
+/* The tribunal-scope guidance paragraph at the bottom of that box: plain
+   bold body text at the standard 18px, not the small uppercase mono
+   "eyebrow" treatment (which read as oversized/disproportionate applied
+   to a full sentence rather than a short label). */
+.trib-guidance-text {
+    font-family: 'IBM Plex Sans', sans-serif !important;
+    font-size: 18px !important;
+    font-weight: bold !important;
+    text-transform: none !important;
+    letter-spacing: normal !important;
+    color: var(--trib-text) !important;
+}
+
+/* Final Tribunal Outcome banner (see _outcome_banner_html): a richer sage/
+   mint for "Justified" rather than a pale wash, so dark-gray text stays
+   crisp; a light red for "Not Justified". */
+.trib-outcome-banner {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 14px 18px;
+    border-radius: 6px;
+    border: 1px solid var(--trib-border-strong);
+    margin-bottom: 8px;
+}
+.trib-outcome-verdict { font-size: 20px; font-weight: 700; color: var(--trib-text); }
+.trib-outcome-count { font-size: 16px; color: var(--trib-text); }
 
 [data-testid="stMetric"] {
     background: var(--trib-panel);
@@ -209,12 +340,26 @@ hr { border-color: var(--trib-border) !important; }
     padding: 4px 8px;
     border-radius: 2px;
     text-transform: uppercase;
-    white-space: nowrap;
     align-self: flex-start;
+    max-width: 100%;
+    box-sizing: border-box;
 }
-.trib-badge--prosecution { color: var(--trib-red-pale); border: 1px solid #7f1d1d; }
-.trib-badge--defense { color: var(--trib-cyan); border: 1px solid #155e75; }
-.trib-badge--doctrine { color: var(--trib-gold-pale); border: 1px solid var(--trib-border-gold); background: rgba(217,119,6,0.1); }
+.trib-badge--prosecution { color: var(--trib-red-pale); border: 1px solid #7f1d1d; white-space: nowrap; }
+.trib-badge--defense { color: var(--trib-cyan); border: 1px solid #155e75; white-space: nowrap; }
+/* The doctrine badge holds a long judge/model title (e.g. "THE AHARON
+   BARAK MODEL (PURPOSIVE / CONSTITUTIONAL BALANCING)") — unlike the short
+   PROSECUTION/DEFENSE badges, it must wrap instead of forcing nowrap, and
+   gets its own smaller font-size override below so it fits its box
+   cleanly instead of clipping/overflowing. */
+.trib-badge--doctrine {
+    color: var(--trib-gold-pale);
+    border: 1px solid var(--trib-border-gold);
+    background: rgba(217,119,6,0.1);
+    white-space: normal;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    line-height: 1.35;
+}
 .trib-card-body { font-size: 13.5px; line-height: 1.65; color: var(--trib-text-body); margin: 0; }
 .trib-verdict-row {
     display: flex; align-items: center; gap: 9px;
@@ -223,6 +368,72 @@ hr { border-color: var(--trib-border) !important; }
 }
 .trib-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
 .trib-verdict-text { font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; letter-spacing: 0.1em; }
+
+/* --- Explicitly-bordered boxes (Budget Summary, Canonical Case Facts
+   summary): a real HTML wrapper we control end to end, since Streamlit
+   doesn't expose a stable per-instance selector for st.container(border=
+   True) to override its border to this exact spec. --- */
+.trib-bordered-box {
+    border: 2px solid var(--trib-border-explicit) !important;
+    border-radius: 8px !important;
+    padding: 1rem !important;
+    background: var(--trib-panel);
+    margin-bottom: 14px;
+}
+
+/* --- Budget metrics grid + the Glacier-highlighted "active run" badge --- */
+.trib-metric-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+}
+.trib-metric {
+    display: flex; flex-direction: column; gap: 4px;
+    padding: 8px 10px; border-radius: 3px;
+    background: var(--trib-bg); border: 1px solid var(--trib-border-strong);
+}
+.trib-metric-label {
+    font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--trib-text);
+}
+.trib-metric-value {
+    font-family: 'IBM Plex Mono', monospace; font-size: 1.1rem; font-weight: 600;
+    color: var(--trib-text);
+}
+/* The active Run Number indicator specifically: Glacier background. */
+.trib-metric--run {
+    background: var(--trib-glacier) !important;
+    border-color: var(--trib-border-explicit);
+}
+.trib-metric--run .trib-metric-label, .trib-metric--run .trib-metric-value {
+    color: var(--trib-text) !important;
+}
+
+/* --- Historical Runs table (st.table, a real HTML <table> — st.dataframe
+   is a canvas-rendered grid widget with no styleable per-cell DOM, so it
+   can't be themed this way at all). Mint cells, crisp black borders,
+   centered text throughout. --- */
+[data-testid="stTable"] table {
+    border-collapse: collapse !important;
+    width: 100%;
+}
+[data-testid="stTable"] th, [data-testid="stTable"] td {
+    background: var(--trib-mint-table) !important;
+    color: var(--trib-text) !important;
+    border: 1px solid #000000 !important;
+    text-align: center !important;
+    vertical-align: middle !important;
+}
+
+/* --- Hide Streamlit's default chrome: main menu, Deploy button, header/
+   decoration bar, and the "Made with Streamlit" footer. Keeps the app
+   surface fully branded with no way to reach Streamlit's own settings
+   menu or see Streamlit branding. --- */
+#MainMenu { visibility: hidden !important; display: none !important; }
+.stDeployButton { visibility: hidden !important; display: none !important; }
+header, [data-testid="stHeader"] { visibility: hidden !important; height: 0 !important; }
+header button { visibility: hidden !important; display: none !important; }
+footer { visibility: hidden !important; display: none !important; }
 </style>
 """
 
@@ -272,6 +483,71 @@ def _advocate_card_html(title: str, side: str, text: str) -> str:
     <span class="trib-badge {badge_class}">{badge_label}</span>
   </div>
   <p class="trib-card-body">{body}</p>
+</div>"""
+
+
+def _budget_metric_html(label: str, value: str, *, is_run_badge: bool = False) -> str:
+    """One metric tile inside the Budget Summary bordered box. The active
+    Run Number tile (``is_run_badge=True``) gets a Glacier background,
+    distinct from the rest — this is what makes it the "Active Run
+    Indicator" rather than just another generic metric.
+    """
+    css_class = "trib-metric trib-metric--run" if is_run_badge else "trib-metric"
+    return (
+        f'<div class="{css_class}">'
+        f'<span class="trib-metric-label">{html.escape(label)}</span>'
+        f'<span class="trib-metric-value">{html.escape(value)}</span>'
+        f"</div>"
+    )
+
+
+def _budget_box_html(metrics: list[tuple[str, str]], run_id: int) -> str:
+    """The Budget Summary metrics as one explicitly-bordered card
+    (``.trib-bordered-box``) containing a grid of metric tiles, with the
+    Run ID tile highlighted Glacier as the active-run indicator. The
+    section title itself is a real st.subheader() call at the caller (see
+    render_budget_box / render_history_tab) — not built into this HTML —
+    so it renders as a standard prominent header matching "Final Tribunal
+    Outcome" and the rest of the app, not a small all-caps eyebrow badge.
+    """
+    tiles = "".join(_budget_metric_html(label, value) for label, value in metrics)
+    tiles += _budget_metric_html("Run #", f"#{run_id}", is_run_badge=True)
+    return f"""<div class="trib-bordered-box">
+  <div class="trib-metric-grid">{tiles}</div>
+</div>"""
+
+
+def _case_facts_summary_html() -> str:
+    """The core case-facts fields (Case ID / Accused / Deceased / Alleged
+    act / Tribunal issue / Scope) as one explicitly-bordered card. The
+    three sub-topics (Agreed Facts / Prosecution / Defense Arguments) stay
+    as separate real st.expander widgets below this — they can't be
+    embedded inside this same raw HTML block since they're interactive
+    Streamlit components, not static text.
+    """
+    return f"""<div class="trib-bordered-box trib-case-facts">
+  <p class="trib-card-body"><strong>Case ID:</strong> {html.escape(case_data.CASE_ID)}</p>
+  <p class="trib-card-body"><strong>Accused:</strong> {html.escape(case_data.ACCUSED)}</p>
+  <p class="trib-card-body"><strong>Deceased:</strong> {html.escape(case_data.DECEASED)}</p>
+  <p class="trib-card-body"><strong>Alleged act:</strong> {html.escape(case_data.ALLEGED_ACT)}</p>
+  <p class="trib-card-body"><strong>Tribunal issue:</strong> {html.escape(case_data.TRIBUNAL_ISSUE)}</p>
+  <p class="trib-guidance-text" style="margin-top:8px">{html.escape(case_data.TRIBUNAL_SCOPE)}</p>
+</div>"""
+
+
+def _outcome_banner_html(majority_verdict: str, majority_count: int) -> str:
+    """The Final Tribunal Outcome banner as custom HTML rather than
+    st.success/st.error, so the "Justified" case can get a richer sage/
+    mint background instead of Streamlit's own pale default — Streamlit
+    gives no stable per-variant selector to recolor just the success alert
+    via CSS.
+    """
+    is_justified = majority_verdict == "Justified"
+    bg = "#A3E4D7" if is_justified else "#FCA5A5"
+    label = html.escape(majority_verdict).upper()
+    return f"""<div class="trib-outcome-banner" style="background:{bg}">
+  <span class="trib-outcome-verdict">{label}</span>
+  <span class="trib-outcome-count">&mdash; {majority_count} of 3 judges</span>
 </div>"""
 
 
@@ -449,10 +725,7 @@ def render_majority_outcome(judges: dict) -> None:
     votes = Counter(opinion["verdict"] for opinion in judges.values())
     majority_verdict, majority_count = votes.most_common(1)[0]
     st.subheader("Final Tribunal Outcome (Majority Rule)")
-    if majority_verdict == "Justified":
-        st.success(f"**{majority_verdict}** — {majority_count} of 3 judges")
-    else:
-        st.error(f"**{majority_verdict}** — {majority_count} of 3 judges")
+    st.markdown(_outcome_banner_html(majority_verdict, majority_count), unsafe_allow_html=True)
     st.caption(
         "The tribunal issues no single collective opinion — each judge's "
         "reasoning above stands independently. This is a simple majority "
@@ -464,16 +737,20 @@ def render_majority_outcome(judges: dict) -> None:
 def render_budget_box(tracker: CostTracker, execution_time: float, run_id: int) -> None:
     rate = get_ils_exchange_rate()
     st.subheader("Budget Summary")
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Execution time", f"{execution_time:.2f} sec")
-    m2.metric("Total tokens", f"{tracker.total_tokens:,}")
-    m3.metric("Estimated cost (USD)", f"${tracker.cost_usd:.6f}")
-    m4.metric("Estimated cost (ILS)", f"₪{tracker.cost_ils:.6f}")
-
-    d1, d2, d3 = st.columns(3)
-    d1.metric("Prompt tokens", f"{tracker.prompt_tokens:,}")
-    d2.metric("Completion tokens", f"{tracker.completion_tokens:,}")
-    d3.metric("SQLite Run ID", run_id)
+    st.markdown(
+        _budget_box_html(
+            [
+                ("Execution time", f"{execution_time:.2f} sec"),
+                ("Total tokens", f"{tracker.total_tokens:,}"),
+                ("Estimated cost (USD)", f"${tracker.cost_usd:.6f}"),
+                ("Estimated cost (ILS)", f"₪{tracker.cost_ils:.6f}"),
+                ("Prompt tokens", f"{tracker.prompt_tokens:,}"),
+                ("Completion tokens", f"{tracker.completion_tokens:,}"),
+            ],
+            run_id,
+        ),
+        unsafe_allow_html=True,
+    )
 
     st.caption(f"ILS rate used: {rate:.2f}  •  Database: `{get_db_path()}`")
 
@@ -638,24 +915,34 @@ def render_run_tab(api_key: str | None, model: str | None, random_mode: bool) ->
     last_result = st.session_state.get("last_result")
 
     with case_facts_slot:
-        with st.expander("📜 Canonical Case Facts", expanded=False):
-            st.markdown(f"**Case ID:** {case_data.CASE_ID}")
-            st.markdown(f"**Accused:** {case_data.ACCUSED}")
-            st.markdown(f"**Deceased:** {case_data.DECEASED}")
-            st.markdown(f"**Alleged act:** {case_data.ALLEGED_ACT}")
-            st.markdown("**Agreed facts:**")
-            for i, fact in enumerate(case_data.AGREED_FACTS, start=1):
-                st.markdown(f"{i}. {fact}")
-            st.markdown(f"**Tribunal issue:** {case_data.TRIBUNAL_ISSUE}")
-            st.caption(case_data.TRIBUNAL_SCOPE)
+        # A plain toggle + conditional block, not a real st.expander: the
+        # three sections below (Agreed Facts / Prosecution Arguments /
+        # Defense Arguments) must themselves be real st.expander widgets
+        # per spec, and Streamlit forbids nesting an expander inside
+        # another expander — so this outer collapsible can't be one too.
+        case_facts_open = st.session_state.get("case_facts_open", False)
+        if st.button(
+            f"{'▾' if case_facts_open else '▸'} 📜 Canonical Case Facts",
+            key="case_facts_toggle",
+            width="stretch",
+        ):
+            st.session_state["case_facts_open"] = not case_facts_open
+            st.rerun()
 
-            st.divider()
-            st.markdown("**Prosecution Arguments (case theory):**")
-            for point in case_data.PROSECUTION_ARGUMENTS:
-                st.markdown(f"- {point}")
-            st.markdown("**Defense Arguments (case theory):**")
-            for point in case_data.DEFENSE_ARGUMENTS:
-                st.markdown(f"- {point}")
+        if st.session_state.get("case_facts_open", False):
+            st.markdown(_case_facts_summary_html(), unsafe_allow_html=True)
+
+            with st.expander("Agreed Facts", expanded=False):
+                for i, fact in enumerate(case_data.AGREED_FACTS, start=1):
+                    st.markdown(f"{i}. {fact}")
+
+            with st.expander("Prosecution Arguments", expanded=False):
+                for point in case_data.PROSECUTION_ARGUMENTS:
+                    st.markdown(f"- {point}")
+
+            with st.expander("Defense Arguments", expanded=False):
+                for point in case_data.DEFENSE_ARGUMENTS:
+                    st.markdown(f"- {point}")
 
             if last_result:
                 st.divider()
@@ -716,7 +1003,14 @@ def render_history_tab() -> None:
             "cost_ils",
             "execution_time_sec",
         ]
-        st.dataframe(df[summary_cols], width="stretch", hide_index=True)
+        # st.table (a real HTML <table>) instead of st.dataframe (a
+        # canvas-rendered grid widget with no per-cell DOM to style) — only
+        # st.table's actual <th>/<td> elements can be themed with CSS at
+        # all. Blank the row index rather than showing 0..N, closest
+        # st.table gets to st.dataframe's hide_index=True.
+        overview_table = df[summary_cols].copy()
+        overview_table.index = [""] * len(overview_table)
+        st.table(overview_table)
 
     # (b) Run Selector & Action Trigger — selecting a dropdown option alone
     # does NOT change what's displayed below; only clicking "Load Selected
@@ -800,14 +1094,23 @@ def render_history_tab() -> None:
         render_judges(judges)
 
     # (f) Budget & Token Telemetry Summary.
-    st.subheader("Budget Summary")
     rate = get_ils_exchange_rate()
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Execution time", f"{row['execution_time_sec']:.2f} sec")
-    m2.metric("Total tokens", f"{int(row['total_tokens']):,}")
-    m3.metric("Estimated cost (USD)", f"${row['cost_usd']:.6f}")
-    m4.metric("Estimated cost (ILS)", f"₪{row['cost_ils']:.6f}")
-    st.caption(f"Prompt tokens: {int(row['prompt_tokens']):,} • Completion tokens: {int(row['completion_tokens']):,} • ILS rate: {rate:.2f}")
+    st.subheader("Budget Summary")
+    st.markdown(
+        _budget_box_html(
+            [
+                ("Execution time", f"{row['execution_time_sec']:.2f} sec"),
+                ("Total tokens", f"{int(row['total_tokens']):,}"),
+                ("Estimated cost (USD)", f"${row['cost_usd']:.6f}"),
+                ("Estimated cost (ILS)", f"₪{row['cost_ils']:.6f}"),
+                ("Prompt tokens", f"{int(row['prompt_tokens']):,}"),
+                ("Completion tokens", f"{int(row['completion_tokens']):,}"),
+            ],
+            loaded_run_id,
+        ),
+        unsafe_allow_html=True,
+    )
+    st.caption(f"ILS rate: {rate:.2f}")
 
 
 # ---------------------------------------------------------------------------
@@ -842,6 +1145,12 @@ def main() -> None:
         st.session_state["hist_loaded_run_id"] = None
     if "hist_active_detail" not in st.session_state:
         st.session_state["hist_active_detail"] = None
+    # Canonical Case Facts: closed by default, same custom-toggle pattern
+    # (its three nested sub-sections must be real st.expander widgets, so
+    # this outer collapsible can't be a real expander itself — see
+    # render_run_tab).
+    if "case_facts_open" not in st.session_state:
+        st.session_state["case_facts_open"] = False
 
     api_key, model, random_mode = render_sidebar()
 
