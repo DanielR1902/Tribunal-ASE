@@ -34,12 +34,10 @@ from common.llm_client import (  # noqa: E402
     SINGLE_AGENT_MAX_TOKENS,
     USAGE_ACCOUNTING_EXTRA_BODY,
     build_schema_instructions,
-    create_chat_completion,
-    extract_finish_reason,
+    create_structured_completion,
     extract_usage,
     get_client,
     get_model,
-    parse_json_response,
 )
 from common.personas import ADVOCATE_PERSONAS, JUDGE_PERSONAS  # noqa: E402
 
@@ -228,9 +226,10 @@ def main() -> None:
     print(f"Running {case_data.CASE_ID} — single-agent architecture (model: {model})...")
 
     start = time.perf_counter()
-    response = create_chat_completion(
+    verdict, response = create_structured_completion(
         client,
         model=model,
+        schema=TribunalVerdict,
         messages=[{"role": "user", "content": build_prompt()}],
         response_format=JSON_OBJECT_RESPONSE_FORMAT,
         temperature=0.7,
@@ -238,12 +237,6 @@ def main() -> None:
         extra_body=USAGE_ACCOUNTING_EXTRA_BODY,
     )
     execution_time = time.perf_counter() - start
-
-    verdict = parse_json_response(
-        response.choices[0].message.content or "",
-        TribunalVerdict,
-        finish_reason=extract_finish_reason(response),
-    )
 
     prompt_tokens, completion_tokens, actual_cost, executed_model = extract_usage(response)
     tracker.record(

@@ -1,0 +1,70 @@
+INTENT — Step 1: High-Level Objective
+======================================
+
+PROJECT
+-------
+Tribunal: a resilient, vendor-agnostic legal tribunal simulation
+("The Realm v. Jon Snow") built on OpenRouter.
+
+WHAT THIS PROJECT IS
+---------------------
+A fictional-legal reasoning exercise that compares two LLM agent
+architectures — a monolithic Single-Agent call and a decomposed
+Multi-Agent pipeline — running the SAME tribunal case to a verdict, so the
+two approaches can be measured against each other on cost, speed, and
+output quality rather than assumed. The case, personas, and judicial
+philosophies are fixed and canonical (see spec.md); what varies is the
+architecture and the underlying LLM engine.
+
+The project is explicitly NOT tied to any single LLM provider. Every
+completion call is routed through OpenRouter, so the simulation can run on
+whichever underlying model answers — and keep running even when a specific
+model is unavailable, rate-limited, or returns garbage.
+
+CORE OBJECTIVES
+---------------
+1. Fast execution
+   Every architecture and every role (advocate, judge) is time- and
+   token-bounded. A run should complete in a bounded window regardless of
+   which model answers — no unbounded generation, no indefinite hangs.
+
+2. Cost-effective LLM routing
+   Real per-call cost is read back from OpenRouter's usage accounting
+   whenever the provider reports it; a local pricing table is only a
+   fallback estimate. Token caps exist specifically to keep every call
+   cheap and short, not just fast.
+
+3. Deterministic, resilient fallback architecture
+   No single point of failure on model choice. A primary attempt (a fixed
+   selection, a random draw from a diverse pool, or OpenRouter's own
+   "auto" meta-router) that fails outright (404/unroutable), is rate
+   limited, times out, or comes back with unparseable output must
+   transparently degrade to a verified-stable model — the simulation
+   itself should never crash because one upstream model had a bad day.
+
+4. Structured judicial deliberation logging
+   Every run — regardless of architecture or which engine actually
+   answered — produces the same shape of record: prosecution and defense
+   arguments, three independent judicial opinions (reasoning + verdict),
+   token/cost/timing metrics, and the exact model that produced them. That
+   record is persisted so runs can be compared and audited after the fact,
+   not just watched live.
+
+NON-GOALS
+---------
+- This is not legal advice, and the "judicial philosophy" personas are
+  stylized, fictionalized approximations of jurisprudential schools of
+  thought — not statements about any real jurist's actual views.
+- The project does not aim to pick a "winner" architecture; it aims to
+  make the two architectures directly, fairly comparable under identical
+  conditions.
+- No user-facing terminology should tie the simulation to one specific
+  fictional universe's proper nouns beyond what the case itself requires;
+  UI copy speaks in neutral, institutional legal terms ("the Realm", "the
+  tribunal") rather than franchise-specific place names.
+
+DOWNSTREAM ARTIFACTS
+--------------------
+This intent is elaborated into concrete, verifiable requirements in
+spec.md (Step 2), and into operational/agentic conventions for working in
+this codebase in CLAUDE.md (Step 3).

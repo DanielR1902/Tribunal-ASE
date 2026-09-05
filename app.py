@@ -24,15 +24,13 @@ from common.cost_tracker import CostTracker, get_ils_exchange_rate
 from common.database import TrialRunRecord, get_db_path, init_db, log_trial_run
 from common.llm_client import (
     JSON_OBJECT_RESPONSE_FORMAT,
-    MODEL_POOL,
     SINGLE_AGENT_MAX_TOKENS,
     USAGE_ACCOUNTING_EXTRA_BODY,
-    create_chat_completion,
-    extract_finish_reason,
+    VERIFIED_STABLE_POOL,
+    create_structured_completion,
     extract_usage,
     get_client,
     get_model,
-    parse_json_response,
     pick_random_model,
 )
 from common.personas import JUDGE_ORDER, JUDGE_PERSONAS
@@ -66,9 +64,10 @@ def run_single_agent(api_key: str, model: str) -> dict:
     tracker = CostTracker(model=model)
 
     start = time.perf_counter()
-    response = create_chat_completion(
+    verdict, response = create_structured_completion(
         client,
         model=model,
+        schema=TribunalVerdict,
         messages=[{"role": "user", "content": build_single_prompt()}],
         response_format=JSON_OBJECT_RESPONSE_FORMAT,
         temperature=0.7,
@@ -76,12 +75,6 @@ def run_single_agent(api_key: str, model: str) -> dict:
         extra_body=USAGE_ACCOUNTING_EXTRA_BODY,
     )
     execution_time = time.perf_counter() - start
-
-    verdict = parse_json_response(
-        response.choices[0].message.content or "",
-        TribunalVerdict,
-        finish_reason=extract_finish_reason(response),
-    )
 
     prompt_tokens, completion_tokens, actual_cost, executed_model = extract_usage(response)
     tracker.record(
@@ -317,10 +310,13 @@ def render_sidebar() -> tuple[str | None, str | None, bool]:
         model: str | None = None
         st.sidebar.caption("An engine will be picked at random when you click Run.")
     else:
+        # Fixed mode only offers the verified-stable pool — no
+        # "openrouter/auto" (a meta-router, not a specific engine to pick)
+        # and no experimental/unproven entries from the dynamic pool.
         model = st.sidebar.selectbox(
             "OpenRouter model",
-            options=MODEL_POOL,
-            index=MODEL_POOL.index(DEFAULT_MODEL) if DEFAULT_MODEL in MODEL_POOL else 0,
+            options=VERIFIED_STABLE_POOL,
+            index=VERIFIED_STABLE_POOL.index(DEFAULT_MODEL) if DEFAULT_MODEL in VERIFIED_STABLE_POOL else 0,
             disabled=is_running,
         )
 

@@ -20,9 +20,8 @@ from common.llm_client import (
     USAGE_ACCOUNTING_EXTRA_BODY,
     build_schema_instructions,
     create_chat_completion,
-    extract_finish_reason,
+    create_structured_completion,
     extract_usage,
-    parse_json_response,
 )
 from common.personas import AdvocatePersona, JudgePersona
 
@@ -165,9 +164,10 @@ JSON object, followed by "reasoning" as the second field — this way your
 verdict is already recorded even if the response gets cut off before
 "reasoning" finishes.
 """ + build_schema_instructions(JudgeOpinion)
-        response = create_chat_completion(
+        opinion, response = create_structured_completion(
             self.client,
             model=self.model,
+            schema=JudgeOpinion,
             messages=[
                 {"role": "system", "content": self.persona["persona"]},
                 {"role": "user", "content": prompt},
@@ -178,7 +178,6 @@ verdict is already recorded even if the response gets cut off before
             extra_body=USAGE_ACCOUNTING_EXTRA_BODY,
         )
         content = response.choices[0].message.content or ""
-        opinion = parse_json_response(content, JudgeOpinion, finish_reason=extract_finish_reason(response))
 
         prompt_tokens, completion_tokens, actual_cost, executed_model = extract_usage(response)
         call_result = CallResult(
