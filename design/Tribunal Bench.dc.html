@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+<link href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  body { margin: 0; background: #0f172a; color: #e2e8f0; font-family: "IBM Plex Sans", Helvetica, sans-serif; }
+  a { color: #f59e0b; text-decoration: none; }
+  a:hover { color: #fbbf24; text-decoration: underline; }
+  ::selection { background: #d97706; color: #0f172a; }
+</style>
+</helmet>
+<div style="min-height: 100vh; background: #0f172a; padding: 0 0 56px">
+
+  <header style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 20px; padding: 26px clamp(18px, 4vw, 44px) 22px; borderBottom: 1px solid #1e293b; background: linear-gradient(180deg, #131d33 0%, #0f172a 100%)">
+    <div style="display: flex; flex-direction: column; gap: 7px; min-width: 0">
+      <div style="display: flex; align-items: center; gap: 12px">
+        <div style="width: 10px; height: 26px; background: #d97706"></div>
+        <h1 style="margin: 0; font-family: Spectral, Georgia, serif; font-weight: 500; font-size: clamp(22px, 3vw, 31px); letter-spacing: 0.01em; color: #f8fafc; text-wrap: pretty">The High Tribunal of the Realm</h1>
+      </div>
+      <p style="margin: 0 0 0 22px; font-size: 13.5px; color: #94a3b8; letter-spacing: 0.02em; text-wrap: pretty">Comparative Judicial Deliberation Bench — The Realm v. Jon Snow</p>
+    </div>
+    <div style="display: flex; flex-wrap: wrap; gap: 10px">
+      <div style="display: flex; align-items: center; gap: 8px; padding: 7px 13px; border: 1px solid #1e293b; background: #131d33; borderRadius: 3px; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; letter-spacing: 0.04em; color: #cbd5e1">
+        <span style="width: 7px; height: 7px; borderRadius: 50%; background: #34d399"></span>SQLite Connected (court_runs.db)
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; padding: 7px 13px; border: 1px solid #1e293b; background: #131d33; borderRadius: 3px; font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; letter-spacing: 0.04em; color: #cbd5e1">
+        <span style="width: 7px; height: 7px; borderRadius: 50%; background: #f59e0b"></span>OpenRouter Active
+      </div>
+    </div>
+  </header>
+
+  <div style="display: grid; gridTemplateColumns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); alignItems: start; gap: 0">
+    <div style="display: grid; gridTemplateColumns: minmax(0, 300px) minmax(0, 1fr); gap: 0; gridColumn: 1 / -1">
+
+      <aside style="borderRight: 1px solid #1e293b; padding: 26px clamp(16px, 2vw, 24px); display: flex; flex-direction: column; gap: 28px; background: #111a2e; minHeight: 100%; boxSizing: border-box">
+        <div style="display: flex; flex-direction: column; gap: 11px">
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.16em; color: #64748b">PIPELINE MODE</div>
+          <div style="display: flex; padding: 3px; background: #0f172a; border: 1px solid #1e293b; borderRadius: 3px">
+            <button onClick="{{ setMulti }}" style="{{ multiTabStyle }}">Multi-Agent Pipeline</button>
+            <button onClick="{{ setSingle }}" style="{{ singleTabStyle }}">Single-Agent Monolith</button>
+          </div>
+          <p style="margin: 0; font-size: 12px; lineHeight: 1.5; color: #64748b; text-wrap: pretty">{{ modeHint }}</p>
+        </div>
+
+        <div style="height: 1px; background: #1e293b"></div>
+
+        <div style="display: flex; flex-direction: column; gap: 12px">
+          <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.16em; color: #64748b">MODEL ROUTING MODE</div>
+          <label onClick="{{ setRandom }}" style="{{ randomRowStyle }}">
+            <span style="{{ randomDotStyle }}"></span>
+            <span style="display: flex; flex-direction: column; gap: 3px">
+              <span style="font-size: 13.5px; color: #e2e8f0">Random (Auto-Routing)</span>
+              <span style="font-size: 11.5px; color: #64748b">Engine drawn per invocation</span>
+            </span>
+          </label>
+          <label onClick="{{ setFixed }}" style="{{ fixedRowStyle }}">
+            <span style="{{ fixedDotStyle }}"></span>
+            <span style="display: flex; flex-direction: column; gap: 3px">
+              <span style="font-size: 13.5px; color: #e2e8f0">Fixed Engine</span>
+              <span style="font-size: 11.5px; color: #64748b">Pin one model for all roles</span>
+            </span>
+          </label>
+        </div>
+
+        <sc-if value="{{ isFixed }}" hint-placeholder-val="{{ true }}">
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.16em; color: #64748b">ENGINE</div>
+            <select value="{{ engine }}" onChange="{{ onEngine }}" style="appearance: none; width: 100%; padding: 11px 13px; background: #0f172a; color: #f1f5f9; border: 1px solid #334155; borderRadius: 3px; font-family: 'IBM Plex Sans', sans-serif; font-size: 13.5px; outline: none">
+              <option value="Claude 3.5 Haiku">Claude 3.5 Haiku</option>
+              <option value="Gemini 2.5 Flash">Gemini 2.5 Flash</option>
+              <option value="GPT-4o-mini">GPT-4o-mini</option>
+              <option value="Llama 3.3 70B">Llama 3.3 70B</option>
+              <option value="Mistral Large">Mistral Large</option>
+            </select>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isRandom }}" hint-placeholder-val="{{ false }}">
+          <div style="display: inline-flex; alignSelf: flex-start; align-items: center; gap: 8px; padding: 8px 12px; border: 1px dashed #334155; borderRadius: 3px; background: rgba(217,119,6,0.06)">
+            <span style="width: 5px; height: 5px; borderRadius: 50%; background: #d97706"></span>
+            <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.05em; color: #94a3b8">Dynamic Routing via Verified Pool</span>
+          </div>
+        </sc-if>
+
+        <div style="height: 1px; background: #1e293b"></div>
+
+        <button onClick="{{ convene }}" style="width: 100%; padding: 14px 18px; background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%); color: #1c1207; border: none; borderRadius: 3px; font-family: 'IBM Plex Sans', sans-serif; font-weight: 600; font-size: 13.5px; letter-spacing: 0.09em; cursor: pointer; boxShadow: 0 1px 0 rgba(255,255,255,0.18) inset" style-hover="filter: brightness(1.08)" style-active="transform: translateY(1px)">CONVENE TRIBUNAL</button>
+        <div style="marginTop: -18px; font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #64748b; text-align: center">{{ conveneNote }}</div>
+      </aside>
+
+      <main style="padding: 26px clamp(16px, 3vw, 36px); display: flex; flex-direction: column; gap: 26px; minWidth: 0">
+
+        <sc-if value="{{ isMulti }}" hint-placeholder-val="{{ true }}">
+          <div style="display: flex; flex-direction: column; gap: 26px">
+
+            <section style="display: flex; flex-direction: column; gap: 12px">
+              <div style="display: flex; align-items: baseline; gap: 12px">
+                <h2 style="margin: 0; font-family: Spectral, Georgia, serif; font-weight: 500; font-size: 18px; color: #f1f5f9">Arguments of Record</h2>
+                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.14em; color: #64748b">STAGE 01 · ADVOCACY</span>
+              </div>
+              <div style="display: grid; gridTemplateColumns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px">
+                <article style="border: 1px solid #1e293b; borderTop: 2px solid #b91c1c; background: #131d33; borderRadius: 3px; padding: 20px; display: flex; flex-direction: column; gap: 12px">
+                  <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
+                    <div style="font-family: Spectral, Georgia, serif; font-size: 16.5px; color: #f8fafc">Crown Advocate</div>
+                    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.12em; color: #fca5a5; border: 1px solid #7f1d1d; padding: 4px 8px; borderRadius: 2px">PROSECUTION</span>
+                  </div>
+                  <p style="margin: 0; font-size: 13.5px; lineHeight: 1.65; color: #cbd5e1; text-wrap: pretty">The accused, sworn to the office of Lord Commander, struck down the seated sovereign in open court. The oath of fealty admits no private exception: a subject may not appoint himself the arbiter of when allegiance lapses. However grave the sovereign's conduct, the Realm maintained standing organs of impeachment and trial, and those organs were never petitioned.</p>
+                  <p style="margin: 0; font-size: 13.5px; lineHeight: 1.65; color: #94a3b8; text-wrap: pretty">Prayer: conviction for regicide and breach of sworn duty; the deterrent interest of the Realm is paramount.</p>
+                </article>
+                <article style="border: 1px solid #1e293b; borderTop: 2px solid #0e7490; background: #131d33; borderRadius: 3px; padding: 20px; display: flex; flex-direction: column; gap: 12px">
+                  <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
+                    <div style="font-family: Spectral, Georgia, serif; font-size: 16.5px; color: #f8fafc">Counsel for the Accused</div>
+                    <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.12em; color: #67e8f9; border: 1px solid #155e75; padding: 4px 8px; borderRadius: 2px">DEFENCE</span>
+                  </div>
+                  <p style="margin: 0; font-size: 13.5px; lineHeight: 1.65; color: #cbd5e1; text-wrap: pretty">The act followed the mass immolation of a surrendered civilian population and an announced intention to continue. No tribunal was available; no lesser measure could have arrested the harm within the hours that remained. The defence pleads necessity and the defence of others, both recognised where the peril is imminent, unlawful, and otherwise unavoidable.</p>
+                  <p style="margin: 0; font-size: 13.5px; lineHeight: 1.65; color: #94a3b8; text-wrap: pretty">Prayer: acquittal; alternatively, mitigation to exile in lieu of capital sentence.</p>
+                </article>
+              </div>
+            </section>
+
+            <section style="display: flex; flex-direction: column; gap: 12px">
+              <div style="display: flex; align-items: baseline; gap: 12px">
+                <h2 style="margin: 0; font-family: Spectral, Georgia, serif; font-weight: 500; font-size: 18px; color: #f1f5f9">Judicial Bench</h2>
+                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.14em; color: #64748b">STAGE 02 · DELIBERATION</span>
+              </div>
+              <div style="display: grid; gridTemplateColumns: repeat(auto-fit, minmax(min(100%, 270px), 1fr)); gap: 16px">
+                <sc-for list="{{ justices }}" as="j" hint-placeholder-count="3">
+                  <article style="border: 1px solid #1e293b; background: #131d33; borderRadius: 3px; padding: 20px; display: flex; flex-direction: column; gap: 13px">
+                    <div style="display: flex; flex-direction: column; gap: 8px">
+                      <div style="font-family: Spectral, Georgia, serif; font-size: 16.5px; color: #f8fafc">{{ j.name }}</div>
+                      <span style="alignSelf: flex-start; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.1em; color: #fcd34d; border: 1px solid #78350f; background: rgba(217,119,6,0.1); padding: 4px 8px; borderRadius: 2px">{{ j.doctrine }}</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 9px; padding: 9px 11px; borderRadius: 2px; background: #0f172a; border: 1px solid #1e293b">
+                      <span style="width: 6px; height: 6px; borderRadius: 50%; background: {{ j.color }}"></span>
+                      <span style="font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; letter-spacing: 0.1em; color: {{ j.color }}">{{ j.verdict }}</span>
+                      <span style="marginLeft: auto; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: #475569">{{ j.engine }}</span>
+                    </div>
+                    <p style="margin: 0; font-size: 13px; lineHeight: 1.65; color: #cbd5e1; text-wrap: pretty">{{ j.rationale }}</p>
+                    <div style="marginTop: auto; paddingTop: 11px; borderTop: 1px solid #1e293b; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.06em; color: #64748b">{{ j.cite }}</div>
+                  </article>
+                </sc-for>
+              </div>
+            </section>
+
+            <section style="border: 1px solid #78350f; borderLeft: 4px solid #f59e0b; background: linear-gradient(90deg, rgba(217,119,6,0.16) 0%, rgba(19,29,51,0.6) 62%); borderRadius: 3px; padding: 22px 24px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 18px">
+              <div style="display: flex; flex-direction: column; gap: 7px; minWidth: 0">
+                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.16em; color: #fbbf24">FINAL RULING OF THE TRIBUNAL</div>
+                <div style="font-family: Spectral, Georgia, serif; font-size: clamp(19px, 2.4vw, 25px); color: #fefce8; text-wrap: pretty">2–1 Majority: Acquitted on grounds of extreme necessity</div>
+                <div style="font-size: 13px; color: #cbd5e1; text-wrap: pretty">Barak, J. and Elon, J. concurring in the result; Shamgar, J. dissenting. Conditional order of exile beyond the northern frontier entered by consent of the Realm.</div>
+              </div>
+              <div style="display: flex; gap: 10px; font-family: 'IBM Plex Mono', monospace; font-size: 11px">
+                <div style="padding: 10px 14px; border: 1px solid #78350f; borderRadius: 2px; text-align: center; color: #fcd34d">ACQUIT<br /><span style="fontSize: 17px; color: #fefce8">2</span></div>
+                <div style="padding: 10px 14px; border: 1px solid #334155; borderRadius: 2px; text-align: center; color: #94a3b8">CONVICT<br /><span style="fontSize: 17px; color: #e2e8f0">1</span></div>
+              </div>
+            </section>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isSingle }}" hint-placeholder-val="{{ false }}">
+          <section style="display: flex; flex-direction: column; gap: 12px">
+            <div style="display: flex; align-items: baseline; gap: 12px">
+              <h2 style="margin: 0; font-family: Spectral, Georgia, serif; font-weight: 500; font-size: 18px; color: #f1f5f9">Consolidated Dossier</h2>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.14em; color: #64748b">MONOLITHIC INVOCATION · SINGLE PASS</span>
+            </div>
+            <article style="border: 1px solid #1e293b; borderTop: 2px solid #d97706; background: #131d33; borderRadius: 3px; padding: clamp(20px, 3vw, 30px); display: flex; flex-direction: column; gap: 20px">
+              <div style="display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 14px; paddingBottom: 16px; borderBottom: 1px solid #1e293b">
+                <div style="font-family: Spectral, Georgia, serif; font-size: clamp(18px, 2.2vw, 23px); color: #f8fafc; text-wrap: pretty">In re The Realm v. Jon Snow — Judgment of the Tribunal</div>
+                <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.06em; color: #64748b">ONE PROMPT · {{ engineLabel }} · 3 doctrines synthesised</div>
+              </div>
+              <p style="margin: 0; font-size: 14px; lineHeight: 1.75; color: #cbd5e1; text-wrap: pretty">The accused is charged with regicide and breach of a sworn commission. The material facts are not in dispute: the sovereign, having accepted the surrender of a defended city, ordered and oversaw the destruction of its civilian population, and declared the campaign unfinished. The accused, holding no judicial office, killed the sovereign in private audience some hours later.</p>
+              <div style="display: grid; gridTemplateColumns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 16px">
+                <sc-for list="{{ justices }}" as="j" hint-placeholder-count="3">
+                  <div style="padding: 16px; background: #0f172a; border: 1px solid #1e293b; borderRadius: 3px; display: flex; flex-direction: column; gap: 9px">
+                    <div style="font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.1em; color: #fcd34d">{{ j.doctrine }}</div>
+                    <div style="font-family: Spectral, Georgia, serif; font-size: 14.5px; color: #f1f5f9">{{ j.short }}</div>
+                    <p style="margin: 0; font-size: 12.5px; lineHeight: 1.6; color: #94a3b8; text-wrap: pretty">{{ j.synthesis }}</p>
+                  </div>
+                </sc-for>
+              </div>
+              <p style="margin: 0; font-size: 14px; lineHeight: 1.75; color: #cbd5e1; text-wrap: pretty">Reconciling the three approaches, the tribunal holds that the prohibition on regicide is not absolute where the sovereign has become the instrument of ongoing mass killing and no institution of the Realm remains capable of restraining him within the time available. The doctrine of necessity applies; the institutional objection is answered not by denying its force but by confining this holding to circumstances where every lawful organ has demonstrably failed.</p>
+              <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 14px; padding: 17px 20px; background: rgba(217,119,6,0.1); border: 1px solid #78350f; borderRadius: 3px">
+                <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.14em; color: #fbbf24">DISPOSITION</span>
+                <span style="font-family: Spectral, Georgia, serif; font-size: clamp(16px, 2vw, 19px); color: #fefce8; text-wrap: pretty">Acquitted on grounds of extreme necessity — conditional exile entered</span>
+              </div>
+            </article>
+          </section>
+        </sc-if>
+
+        <section style="display: flex; flex-direction: column; gap: 12px">
+          <div style="display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px">
+            <div style="display: flex; align-items: baseline; gap: 12px">
+              <h2 style="margin: 0; font-family: Spectral, Georgia, serif; font-weight: 500; font-size: 18px; color: #f1f5f9">Telemetry &amp; Run History</h2>
+              <span style="font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; letter-spacing: 0.14em; color: #64748b">court_runs.db · {{ runCount }} RECORDS</span>
+            </div>
+            <div style="font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: #64748b">Σ cost {{ totalCost }} · median latency {{ medianLatency }}</div>
+          </div>
+          <div style="border: 1px solid #1e293b; borderRadius: 3px; overflow: hidden; background: #131d33">
+            <div style="overflow-x: auto">
+              <table style="width: 100%; borderCollapse: collapse; minWidth: 760px">
+                <thead>
+                  <tr style="background: #0f172a">
+                    <th style="text-align: left; padding: 12px 16px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.14em; color: #64748b; borderBottom: 1px solid #1e293b; font-weight: 500">RUN ID</th>
+                    <th style="text-align: left; padding: 12px 16px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.14em; color: #64748b; borderBottom: 1px solid #1e293b; font-weight: 500">MODE</th>
+                    <th style="text-align: left; padding: 12px 16px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.14em; color: #64748b; borderBottom: 1px solid #1e293b; font-weight: 500">ENGINE USED</th>
+                    <th style="text-align: right; padding: 12px 16px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.14em; color: #64748b; borderBottom: 1px solid #1e293b; font-weight: 500">LATENCY</th>
+                    <th style="text-align: right; padding: 12px 16px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.14em; color: #64748b; borderBottom: 1px solid #1e293b; font-weight: 500">COST ($)</th>
+                    <th style="text-align: left; padding: 12px 16px; font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.14em; color: #64748b; borderBottom: 1px solid #1e293b; font-weight: 500">FINAL DISPOSITION</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <sc-for list="{{ runs }}" as="r" hint-placeholder-count="6">
+                    <tr style="borderBottom: 1px solid #1a2540" style-hover="background: #16213a">
+                      <td style="padding: 13px 16px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #e2e8f0">{{ r.id }}</td>
+                      <td style="padding: 13px 16px; font-size: 12.5px; color: #94a3b8">{{ r.mode }}</td>
+                      <td style="padding: 13px 16px; font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #cbd5e1">{{ r.engine }}</td>
+                      <td style="padding: 13px 16px; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #cbd5e1">{{ r.latency }}</td>
+                      <td style="padding: 13px 16px; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #cbd5e1">{{ r.cost }}</td>
+                      <td style="padding: 13px 16px; font-size: 12.5px; color: {{ r.color }}">{{ r.disposition }}</td>
+                    </tr>
+                  </sc-for>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+class Component extends DCLogic {
+  state = { pipeline: "multi", routing: "random", engine: "Claude 3.5 Haiku", runN: 0 };
+
+  tab(active) {
+    return {
+      flex: 1, padding: "10px 8px", border: "none", borderRadius: "2px", cursor: "pointer",
+      fontFamily: "'IBM Plex Sans', sans-serif", fontSize: "12px", letterSpacing: "0.04em",
+      background: active ? "#1e293b" : "transparent",
+      color: active ? "#f8fafc" : "#64748b",
+      boxShadow: active ? "inset 0 0 0 1px #334155" : "none"
+    };
+  }
+  row(active) {
+    return {
+      display: "flex", alignItems: "flex-start", gap: "11px", padding: "12px 13px", cursor: "pointer",
+      borderRadius: "3px", border: "1px solid " + (active ? "#78350f" : "#1e293b"),
+      background: active ? "rgba(217,119,6,0.08)" : "#0f172a"
+    };
+  }
+  dot(active) {
+    return {
+      flex: "0 0 auto", width: "13px", height: "13px", marginTop: "3px", borderRadius: "50%",
+      border: "1px solid " + (active ? "#f59e0b" : "#475569"),
+      background: active ? "#f59e0b" : "transparent",
+      boxShadow: active ? "inset 0 0 0 2.5px #131d33" : "none"
+    };
+  }
+
+  renderVals() {
+    const { pipeline, routing, engine, runN } = this.state;
+    const isFixed = routing === "fixed";
+    const engineLabel = isFixed ? engine : "auto-routed";
+    const justices = [
+      { name: "Justice Aharon Barak", short: "Purposive reading", doctrine: "Purposive Interpretation", verdict: "ACQUIT", color: "#34d399", engine: isFixed ? engine : "Gemini 2.5 Flash",
+        rationale: "The prohibition must be read for its purpose, not its letter. Its object is the protection of life and the orderly transfer of power; where the sovereign has become the principal threat to both, a literal reading defeats the very interest the rule exists to serve. Necessity is established on the facts.",
+        cite: "Concurring in the result",
+        synthesis: "Reads the regicide prohibition against its protective purpose; a literal application would defeat the interest the rule secures." },
+      { name: "Justice Menachem Elon", short: "Historic justice", doctrine: "Hebrew Law & Historic Justice", verdict: "ACQUIT", color: "#34d399", engine: isFixed ? engine : "Claude 3.5 Haiku",
+        rationale: "The historic sources treat the pursuer who cannot be stopped by lesser means as forfeit of the protection he would otherwise enjoy. The accused acted without gain, without concealment, and submitted himself to judgment. Conscience and precedent align toward acquittal, tempered by exile.",
+        cite: "Concurring; would impose exile",
+        synthesis: "Draws on the pursuer doctrine: one who cannot be halted by lesser means loses the protection he would otherwise hold." },
+      { name: "Justice Meir Shamgar", short: "Institutional authority", doctrine: "Rule of Law & Institutional Authority", verdict: "CONVICT", color: "#f87171", engine: isFixed ? engine : "Mistral Large",
+        rationale: "A subject who assumes the judicial function destroys the distinction between law and force. However compelling the emergency, the remedy lay with the councils of the Realm, and the accused never sought it. To acquit is to publish a licence for the next such judgment of one man.",
+        cite: "Dissenting",
+        synthesis: "Warns that private adjudication collapses law into force; the institutional remedy was available and unsought." }
+    ];
+    const runs = [
+      { id: "run_0148", mode: "Multi-Agent", engine: "Claude 3.5 Haiku", latency: "14.2 s", cost: "0.0182", disposition: "Acquitted — extreme necessity (2–1)", color: "#86efac" },
+      { id: "run_0147", mode: "Single-Agent", engine: "Gemini 2.5 Flash", latency: "6.4 s", cost: "0.0041", disposition: "Acquitted — necessity, exile imposed", color: "#86efac" },
+      { id: "run_0146", mode: "Multi-Agent", engine: "auto-routed (pool)", latency: "17.9 s", cost: "0.0233", disposition: "Convicted — commuted to exile (2–1)", color: "#fca5a5" },
+      { id: "run_0145", mode: "Multi-Agent", engine: "GPT-4o-mini", latency: "12.8 s", cost: "0.0117", disposition: "Acquitted — defence of others (3–0)", color: "#86efac" },
+      { id: "run_0144", mode: "Single-Agent", engine: "Llama 3.3 70B", latency: "9.1 s", cost: "0.0063", disposition: "Hung — no majority recorded", color: "#fcd34d" },
+      { id: "run_0143", mode: "Multi-Agent", engine: "Mistral Large", latency: "21.4 s", cost: "0.0308", disposition: "Convicted — regicide (2–1)", color: "#fca5a5" }
+    ];
+    return {
+      justices, runs,
+      runCount: runs.length, totalCost: "$0.0944", medianLatency: "13.5 s",
+      isMulti: pipeline === "multi", isSingle: pipeline === "single",
+      isFixed, isRandom: !isFixed, engine, engineLabel,
+      multiTabStyle: this.tab(pipeline === "multi"),
+      singleTabStyle: this.tab(pipeline === "single"),
+      randomRowStyle: this.row(!isFixed), fixedRowStyle: this.row(isFixed),
+      randomDotStyle: this.dot(!isFixed), fixedDotStyle: this.dot(isFixed),
+      modeHint: pipeline === "multi"
+        ? "Advocates and three justices invoked as separate agents; verdicts aggregated by majority."
+        : "One invocation returns the full dossier and tripartite synthesis in a single pass.",
+      conveneNote: runN === 0
+        ? "Bench seated · last run run_0148"
+        : "Session " + String(148 + runN) + " convened · " + (pipeline === "multi" ? "5 agents" : "1 agent") + " · " + engineLabel,
+      setMulti: () => this.setState({ pipeline: "multi" }),
+      setSingle: () => this.setState({ pipeline: "single" }),
+      setRandom: () => this.setState({ routing: "random" }),
+      setFixed: () => this.setState({ routing: "fixed" }),
+      onEngine: (e) => this.setState({ engine: e.target.value }),
+      convene: () => this.setState((s) => ({ runN: s.runN + 1 }))
+    };
+  }
+}
+</script>
+</body>
+</html>
