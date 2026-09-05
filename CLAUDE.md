@@ -2,8 +2,20 @@
 
 Operational conventions for working in this repository. Read alongside
 [`intent.txt`](./intent.txt) (why this project exists) and
-[`spec.md`](./spec.md) (what it must do) — this file covers *how* to work
-in the code day to day.
+[`spec.md`](./spec.md) (what it must do) — this file covers global
+architecture, the Streamlit UI, and root-level commands. It does not
+repeat what's package-scoped: see the `CLAUDE.md` inside each package for
+that package's own responsibilities and guardrails, and defer to the
+scoped file when it's more specific than a rule stated here.
+
+## Sub-package Documentation
+
+| Package | Scope | Guardrails file |
+|---|---|---|
+| `common/` | Shared infra: OpenRouter client/fallback, JSON repair, cost tracking, `court_runs.db` persistence | [`common/CLAUDE.md`](./common/CLAUDE.md) |
+| `project_multi_agent/` | Multi-agent pipeline: orchestration, advocates, 3 independent judges | [`project_multi_agent/CLAUDE.md`](./project_multi_agent/CLAUDE.md) |
+| `project_single_agent/` | Monolithic single-agent tribunal prompt and execution | [`project_single_agent/CLAUDE.md`](./project_single_agent/CLAUDE.md) |
+| `app.py` (no subpackage) | Streamlit UI | covered in this file, below |
 
 ## Directory Blueprint
 
