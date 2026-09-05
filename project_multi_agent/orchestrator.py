@@ -8,7 +8,7 @@ Sequence:
     3. The combined prosecution and defense arguments are submitted to all
        three judges, who deliberate independently and concurrently.
 
-That is 4 advocate calls + 3 judge calls = 7 total Gemini calls per run,
+That is 4 advocate calls + 3 judge calls = 7 total OpenRouter calls per run,
 whose token usage is aggregated into a single ``CostTracker``.
 """
 
@@ -90,6 +90,8 @@ class TribunalOrchestrator:
                     label=f"advocate:{key}",
                     prompt_tokens=call_result.prompt_tokens,
                     completion_tokens=call_result.completion_tokens,
+                    actual_cost_usd=call_result.cost_usd,
+                    executed_model=call_result.executed_model,
                 )
                 results[key] = call_result.text
 
@@ -113,6 +115,8 @@ class TribunalOrchestrator:
                     label=f"judge:{key}",
                     prompt_tokens=call_result.prompt_tokens,
                     completion_tokens=call_result.completion_tokens,
+                    actual_cost_usd=call_result.cost_usd,
+                    executed_model=call_result.executed_model,
                 )
                 opinions[key] = opinion
 

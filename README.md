@@ -2,8 +2,9 @@
 
 A fictional-legal simulation used to compare two LLM agent architectures —
 **single-agent** (one monolithic prompt) vs. **multi-agent** (dedicated
-agents per role) — on the same task: running a tribunal case with
-Google Gemini via the official `google-genai` SDK.
+agents per role) — on the same task: running a tribunal case through
+[OpenRouter](https://openrouter.ai) (default model: `google/gemini-2.5-flash`)
+via the official `openai` SDK pointed at OpenRouter's OpenAI-compatible API.
 
 **Case T-001: The Realm v. Jon Snow.** Jon Snow stands accused of the
 intentional killing of Daenerys Targaryen. Four advocates argue the case
@@ -50,21 +51,23 @@ westeros_tribunal/
    pip install -r requirements.txt
    ```
 
-3. Get a Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey)
-   and create your `.env` file:
+3. Get an API key from [OpenRouter](https://openrouter.ai/keys) and create
+   your `.env` file:
 
    ```bash
    cp .env.example .env
-   # then edit .env and set GEMINI_API_KEY=...
+   # then edit .env and set OPENROUTER_API_KEY=...
    ```
 
    Optional variables in `.env`:
 
-   | Variable         | Default              | Purpose                                   |
-   |------------------|-----------------------|--------------------------------------------|
-   | `GEMINI_MODEL`   | `gemini-2.5-flash`   | Which Gemini model both architectures call |
-   | `ILS_PER_USD`    | `3.65`                | USD → ILS exchange rate used for reporting |
-   | `COURT_DB_PATH`  | `court_runs.db`       | SQLite file location (repo root by default)|
+   | Variable                | Default                     | Purpose                                              |
+   |--------------------------|------------------------------|-------------------------------------------------------|
+   | `OPENROUTER_MODEL`       | `google/gemini-2.5-flash`   | Which OpenRouter model both architectures call         |
+   | `OPENROUTER_SITE_URL`    | a placeholder repo URL       | Sent as `HTTP-Referer` for OpenRouter attribution      |
+   | `OPENROUTER_SITE_NAME`   | `Westeros Tribunal Simulation` | Sent as `X-Title` for OpenRouter attribution         |
+   | `ILS_PER_USD`            | `3.65`                        | USD → ILS exchange rate used for reporting             |
+   | `COURT_DB_PATH`          | `court_runs.db`               | SQLite file location (repo root by default)            |
 
 ## Running the GUI (Streamlit)
 
@@ -116,29 +119,37 @@ sqlite3 court_runs.db "SELECT architecture_mode, total_tokens, cost_usd, executi
 ## Architecture notes
 
 - **Single-agent** (`project_single_agent/main.py`): a single
-  `client.models.generate_content(...)` call, with the full case file, all
-  four advocate personas, and all three judge personas embedded in one
-  prompt. Gemini's structured output (`response_schema` bound to a Pydantic
-  model) forces the reply into `prosecution_summary`, `defense_summary`,
-  and three independent `{reasoning, verdict}` judge objects.
+  `client.chat.completions.create(...)` call through OpenRouter, with the
+  full case file, all four advocate personas, and all three judge personas
+  embedded in one prompt. The prompt embeds the target Pydantic model's JSON
+  Schema and the call requests JSON mode; the reply is parsed and validated
+  into `prosecution_summary`, `defense_summary`, and three independent
+  `{reasoning, verdict}` judge objects.
 
 - **Multi-agent** (`project_multi_agent/`): `agents.py` defines
   `AdvocateAgent` (free-form spoken argument) and `JudgeAgent` (structured
-  `{reasoning, verdict}` output) as thin wrappers around one Gemini call
-  each. `orchestrator.py`'s `TribunalOrchestrator` runs the two prosecution
-  advocates concurrently, then the two defense advocates concurrently, then
-  submits the combined arguments to all three judges concurrently and
-  independently — 7 Gemini calls total, with token usage aggregated across
-  all of them via `common/cost_tracker.py`.
+  `{reasoning, verdict}` output) as thin wrappers around one OpenRouter
+  chat-completion call each. `orchestrator.py`'s `TribunalOrchestrator` runs
+  the two prosecution advocates concurrently, then the two defense advocates
+  concurrently, then submits the combined arguments to all three judges
+  concurrently and independently — 7 OpenRouter calls total, with token
+  usage aggregated across all of them via `common/cost_tracker.py`.
+
+`common/llm_client.py` builds the shared OpenAI-SDK client pointed at
+`https://openrouter.ai/api/v1`, attaches the `HTTP-Referer` / `X-Title`
+attribution headers OpenRouter recommends, and asks OpenRouter for
+per-request usage accounting (`usage: {include: true}`) so real cost can be
+read back off each response.
 
 ## Cost estimation
 
-`common/cost_tracker.py` estimates cost from Gemini's published
-per-million-token pricing for `gemini-2.5-flash`, `gemini-2.5-flash-lite`,
-and `gemini-2.5-pro` (with `gemini-2.5-pro`'s long-context pricing tier
-applied above 200k prompt tokens). Prices are Google's list prices at the
-time this project was written and can change — treat the reported cost as
-an estimate, not an invoice. See
-[ai.google.dev/gemini-api/docs/pricing](https://ai.google.dev/gemini-api/docs/pricing)
-for current rates, and update `PRICING_USD_PER_MILLION_TOKENS` in
-`common/cost_tracker.py` if they drift.
+Every call requests OpenRouter's usage accounting, so `common/cost_tracker.py`
+uses the actual cost OpenRouter reports for each call
+(`response.usage.cost`) whenever it's present. `PRICING_USD_PER_MILLION_TOKENS`
+in that same file is only a fallback estimate for the rare case a
+model/provider doesn't return it, based on Google's published
+per-million-token pricing for `google/gemini-2.5-flash`,
+`google/gemini-2.5-flash-lite`, and `google/gemini-2.5-pro` (with
+`google/gemini-2.5-pro`'s long-context pricing tier applied above 200k
+prompt tokens). Update that table if you point `OPENROUTER_MODEL` at a
+different model family and want a meaningful fallback estimate.

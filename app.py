@@ -17,12 +17,19 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types
+from openai import OpenAI
 
 from common import case_data
 from common.cost_tracker import CostTracker, get_ils_exchange_rate
 from common.database import TrialRunRecord, get_db_path, init_db, log_trial_run
+from common.llm_client import (
+    MODEL_POOL,
+    USAGE_ACCOUNTING_EXTRA_BODY,
+    extract_usage,
+    get_client,
+    get_model,
+    pick_random_model,
+)
 from common.personas import JUDGE_ORDER, JUDGE_PERSONAS
 from project_multi_agent.orchestrator import TribunalOrchestrator
 from project_single_agent.main import TribunalVerdict, build_prompt as build_single_prompt
@@ -30,13 +37,13 @@ from project_single_agent.main import TribunalVerdict, build_prompt as build_sin
 REPO_ROOT = Path(__file__).resolve().parent
 load_dotenv(REPO_ROOT / ".env")
 
-DEFAULT_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
-MODEL_OPTIONS = ["gemini-3.6-flash", "gemini-3.6-flash-lite", "gemini-3.6-pro"]
+DEFAULT_MODEL = get_model()
 
 st.set_page_config(
-    page_title="Westeros Tribunal — Case T-001",
+    page_title="Tribunal",
     page_icon="⚖️",
     layout="wide",
+    initial_sidebar_state="collapsed",
 )
 
 
@@ -45,35 +52,33 @@ st.set_page_config(
 # ---------------------------------------------------------------------------
 
 @st.cache_resource(show_spinner=False)
-def get_client(api_key: str) -> genai.Client:
-    return genai.Client(api_key=api_key)
+def get_cached_client(api_key: str) -> OpenAI:
+    return get_client(api_key)
 
 
 def run_single_agent(api_key: str, model: str) -> dict:
-    client = get_client(api_key)
+    client = get_cached_client(api_key)
     tracker = CostTracker(model=model)
 
     start = time.perf_counter()
-    response = client.models.generate_content(
+    response = client.chat.completions.create(
         model=model,
-        contents=build_single_prompt(),
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=TribunalVerdict,
-            temperature=0.7,
-        ),
+        messages=[{"role": "user", "content": build_single_prompt()}],
+        response_format={"type": "json_object"},
+        temperature=0.7,
+        extra_body=USAGE_ACCOUNTING_EXTRA_BODY,
     )
     execution_time = time.perf_counter() - start
 
-    verdict: TribunalVerdict | None = response.parsed
-    if verdict is None:
-        verdict = TribunalVerdict.model_validate_json(response.text)
+    verdict = TribunalVerdict.model_validate_json(response.choices[0].message.content or "")
 
-    usage = response.usage_metadata
+    prompt_tokens, completion_tokens, actual_cost, executed_model = extract_usage(response)
     tracker.record(
         "single_call",
-        usage.prompt_token_count if usage else 0,
-        usage.candidates_token_count if usage else 0,
+        prompt_tokens,
+        completion_tokens,
+        actual_cost_usd=actual_cost,
+        executed_model=executed_model,
     )
 
     judges = {
@@ -93,7 +98,8 @@ def run_single_agent(api_key: str, model: str) -> dict:
 
     return {
         "architecture": "single_agent",
-        "model": model,
+        "requested_model": model,
+        "executed_model": tracker.executed_model_summary,
         "prosecution_summary": verdict.prosecution_summary,
         "defense_summary": verdict.defense_summary,
         "judges": judges,
@@ -104,7 +110,7 @@ def run_single_agent(api_key: str, model: str) -> dict:
 
 
 def run_multi_agent(api_key: str, model: str) -> dict:
-    client = get_client(api_key)
+    client = get_cached_client(api_key)
     tracker = CostTracker(model=model)
 
     start = time.perf_counter()
@@ -128,7 +134,8 @@ def run_multi_agent(api_key: str, model: str) -> dict:
 
     return {
         "architecture": "multi_agent",
-        "model": model,
+        "requested_model": model,
+        "executed_model": tracker.executed_model_summary,
         "prosecution_summary": result.prosecution_summary,
         "defense_summary": result.defense_summary,
         "judges": judges,
@@ -148,6 +155,7 @@ def _persist_run(
 ) -> int:
     record = TrialRunRecord(
         architecture_mode=architecture_mode,
+        model=tracker.executed_model_summary,
         prosecution_summary=prosecution_summary,
         defense_summary=defense_summary,
         judge_barak_reasoning=judges["barak"]["reasoning"],
@@ -208,7 +216,9 @@ def render_majority_outcome(judges: dict) -> None:
     )
 
 
-def render_budget_box(tracker: CostTracker, execution_time: float, run_id: int, model: str) -> None:
+def render_budget_box(
+    tracker: CostTracker, execution_time: float, run_id: int, requested_model: str
+) -> None:
     rate = get_ils_exchange_rate()
     st.subheader("Budget Summary")
     m1, m2, m3, m4 = st.columns(4)
@@ -222,7 +232,7 @@ def render_budget_box(tracker: CostTracker, execution_time: float, run_id: int, 
     d2.metric("Completion tokens", f"{tracker.completion_tokens:,}")
     d3.metric("SQLite Run ID", run_id)
 
-    st.caption(f"Model: `{model}`  •  ILS rate used: {rate:.2f}  •  Database: `{get_db_path()}`")
+    st.caption(f"Requested model: `{requested_model}`  •  ILS rate used: {rate:.2f}  •  Database: `{get_db_path()}`")
 
     if len(tracker.calls) > 1:
         with st.expander("Per-call token breakdown"):
@@ -230,6 +240,7 @@ def render_budget_box(tracker: CostTracker, execution_time: float, run_id: int, 
                 [
                     {
                         "Agent call": c.label,
+                        "Model executed": c.executed_model,
                         "Prompt tokens": c.prompt_tokens,
                         "Completion tokens": c.completion_tokens,
                         "Total tokens": c.total_tokens,
@@ -244,44 +255,69 @@ def render_budget_box(tracker: CostTracker, execution_time: float, run_id: int, 
 def render_result(result: dict) -> None:
     label = "Single-Agent" if result["architecture"] == "single_agent" else "Multi-Agent"
     st.markdown(f"### Results — {label} Architecture")
+    st.caption("The prosecution's and defense's arguments from this run are shown inside the “Canonical Case Facts” section above.")
 
-    st.subheader("Prosecution Arguments")
-    st.info(result["prosecution_summary"])
-
-    st.subheader("Defense Arguments")
-    st.info(result["defense_summary"])
+    executed = result["executed_model"]
+    requested = result["requested_model"]
+    if executed == requested:
+        st.info(f"🧭 **Model used for this trial:** `{executed}`")
+    else:
+        st.info(
+            f"🧭 **Model used for this trial:** `{executed}`  \n"
+            f"(requested as `{requested}`, resolved by OpenRouter)"
+        )
 
     st.subheader("Judicial Deliberation")
     render_judges(result["judges"])
 
     render_majority_outcome(result["judges"])
 
-    render_budget_box(result["tracker"], result["execution_time"], result["run_id"], result["model"])
+    render_budget_box(result["tracker"], result["execution_time"], result["run_id"], result["requested_model"])
 
 
 # ---------------------------------------------------------------------------
 # Sidebar
 # ---------------------------------------------------------------------------
 
-def render_sidebar() -> tuple[str | None, str]:
+def render_sidebar() -> tuple[str | None, str | None, bool]:
     st.sidebar.title("⚖️ Tribunal Controls")
 
-    api_key = os.getenv("GEMINI_API_KEY")
-    if api_key:
-        st.sidebar.success("GEMINI_API_KEY loaded from .env")
-    else:
-        st.sidebar.error("GEMINI_API_KEY not found")
+    api_key = os.getenv("OPENROUTER_API_KEY")
+    if not api_key:
+        st.sidebar.error("OPENROUTER_API_KEY not found")
         st.sidebar.caption(
             "Copy `.env.example` to `.env` in the project root and add your "
-            "key from https://aistudio.google.com/apikey, then restart "
-            "Streamlit."
+            "key from https://openrouter.ai/keys, then restart Streamlit."
         )
 
-    model = st.sidebar.selectbox(
-        "Gemini model",
-        options=MODEL_OPTIONS,
-        index=MODEL_OPTIONS.index(DEFAULT_MODEL) if DEFAULT_MODEL in MODEL_OPTIONS else 0,
+    st.sidebar.subheader("Model selection")
+    selection_mode = st.sidebar.radio(
+        "Mode",
+        options=["Random per run", "Fixed"],
+        index=0,
+        help=(
+            "Random per run (default): each time you click a Run button, a "
+            "model is drawn at random from a diverse pool spanning several "
+            "providers — including OpenRouter's own openrouter/auto "
+            "meta-router, which dynamically picks a concrete model per "
+            "request server-side. Fixed: always use the model chosen below."
+        ),
+        label_visibility="collapsed",
     )
+    random_mode = selection_mode == "Random per run"
+
+    if random_mode:
+        model: str | None = None
+        st.sidebar.caption("A model will be picked at random from the pool below when you click Run.")
+        with st.sidebar.expander("Model pool"):
+            for m in MODEL_POOL:
+                st.caption(f"• `{m}`")
+    else:
+        model = st.sidebar.selectbox(
+            "OpenRouter model",
+            options=MODEL_POOL,
+            index=MODEL_POOL.index(DEFAULT_MODEL) if DEFAULT_MODEL in MODEL_POOL else 0,
+        )
 
     st.sidebar.divider()
     st.sidebar.caption(
@@ -289,24 +325,19 @@ def render_sidebar() -> tuple[str | None, str]:
         "Multi-Agent = 7 calls (4 advocates + 3 independent judges)."
     )
 
-    return api_key, model
+    return api_key, model, random_mode
 
 
 # ---------------------------------------------------------------------------
 # Tabs
 # ---------------------------------------------------------------------------
 
-def render_run_tab(api_key: str | None, model: str) -> None:
-    with st.expander("📜 Canonical Case Facts", expanded=False):
-        st.markdown(f"**Case ID:** {case_data.CASE_ID}")
-        st.markdown(f"**Accused:** {case_data.ACCUSED}")
-        st.markdown(f"**Deceased:** {case_data.DECEASED}")
-        st.markdown(f"**Alleged act:** {case_data.ALLEGED_ACT}")
-        st.markdown("**Agreed facts:**")
-        for i, fact in enumerate(case_data.AGREED_FACTS, start=1):
-            st.markdown(f"{i}. {fact}")
-        st.markdown(f"**Tribunal issue:** {case_data.TRIBUNAL_ISSUE}")
-        st.caption(case_data.TRIBUNAL_SCOPE)
+def render_run_tab(api_key: str | None, model: str | None, random_mode: bool) -> None:
+    # Reserve the Case Facts slot at the top of the page now, but fill it in
+    # further down — after a button click (if any) has updated
+    # st.session_state["last_result"] — so a fresh run's arguments show up
+    # immediately instead of one rerun later.
+    case_facts_slot = st.container()
 
     st.markdown("#### Run a Simulation")
     col1, col2 = st.columns(2)
@@ -314,24 +345,53 @@ def render_run_tab(api_key: str | None, model: str) -> None:
     run_multi_clicked = col2.button("🏛️ Run Multi-Agent Simulation", width="stretch")
 
     if (run_single_clicked or run_multi_clicked) and not api_key:
-        st.error("Cannot run: GEMINI_API_KEY is not set. See the sidebar for setup instructions.")
+        st.error("Cannot run: OPENROUTER_API_KEY is not set. See the sidebar for setup instructions.")
     elif run_single_clicked:
-        with st.spinner("Running single-agent tribunal (1 Gemini call)..."):
+        active_model = pick_random_model() if random_mode else model
+        if random_mode:
+            st.caption(f"🎲 Randomly selected model for this trial: `{active_model}`")
+        with st.spinner(f"Running single-agent tribunal (1 OpenRouter call, model: {active_model})..."):
             try:
-                st.session_state["last_result"] = run_single_agent(api_key, model)
+                st.session_state["last_result"] = run_single_agent(api_key, active_model)
             except Exception as exc:  # noqa: BLE001
                 st.error(f"Single-agent run failed: {exc}")
     elif run_multi_clicked:
-        with st.spinner("Running multi-agent tribunal (7 Gemini calls: 4 advocates + 3 judges)..."):
+        active_model = pick_random_model() if random_mode else model
+        if random_mode:
+            st.caption(f"🎲 Randomly selected model for this trial: `{active_model}`")
+        with st.spinner(
+            f"Running multi-agent tribunal (7 OpenRouter calls: 4 advocates + 3 judges, model: {active_model})..."
+        ):
             try:
-                st.session_state["last_result"] = run_multi_agent(api_key, model)
+                st.session_state["last_result"] = run_multi_agent(api_key, active_model)
             except Exception as exc:  # noqa: BLE001
                 st.error(f"Multi-agent run failed: {exc}")
 
     st.divider()
 
-    if st.session_state.get("last_result"):
-        render_result(st.session_state["last_result"])
+    last_result = st.session_state.get("last_result")
+
+    with case_facts_slot:
+        with st.expander("📜 Canonical Case Facts", expanded=False):
+            st.markdown(f"**Case ID:** {case_data.CASE_ID}")
+            st.markdown(f"**Accused:** {case_data.ACCUSED}")
+            st.markdown(f"**Deceased:** {case_data.DECEASED}")
+            st.markdown(f"**Alleged act:** {case_data.ALLEGED_ACT}")
+            st.markdown("**Agreed facts:**")
+            for i, fact in enumerate(case_data.AGREED_FACTS, start=1):
+                st.markdown(f"{i}. {fact}")
+            st.markdown(f"**Tribunal issue:** {case_data.TRIBUNAL_ISSUE}")
+            st.caption(case_data.TRIBUNAL_SCOPE)
+
+            if last_result:
+                st.divider()
+                st.markdown("**Prosecution Arguments**")
+                st.info(last_result["prosecution_summary"])
+                st.markdown("**Defense Arguments**")
+                st.info(last_result["defense_summary"])
+
+    if last_result:
+        render_result(last_result)
     else:
         st.caption("No run yet in this session. Click a button above to start.")
 
@@ -352,29 +412,32 @@ def render_history_tab() -> None:
         st.info("No runs logged yet. Run a simulation from the first tab to populate history.")
         return
 
-    st.markdown("#### Past Runs")
-    summary_cols = [
-        "id",
-        "timestamp",
-        "architecture_mode",
-        "judge_barak_verdict",
-        "judge_elon_verdict",
-        "judge_shamgar_verdict",
-        "total_tokens",
-        "cost_usd",
-        "cost_ils",
-        "execution_time_sec",
-    ]
-    st.dataframe(df[summary_cols], width="stretch", hide_index=True)
+    with st.expander("📜 Past Runs", expanded=False):
+        summary_cols = [
+            "id",
+            "timestamp",
+            "architecture_mode",
+            "model",
+            "judge_barak_verdict",
+            "judge_elon_verdict",
+            "judge_shamgar_verdict",
+            "total_tokens",
+            "cost_usd",
+            "cost_ils",
+            "execution_time_sec",
+        ]
+        st.dataframe(df[summary_cols], width="stretch", hide_index=True)
 
     st.markdown("#### Inspect a Past Deliberation")
     options = [
-        f"Run #{row.id} — {row.architecture_mode} — {row.timestamp}"
+        f"Run #{row.id} — {row.architecture_mode} — {getattr(row, 'model', '') or 'unknown model'} — {row.timestamp}"
         for row in df.itertuples()
     ]
     selected = st.selectbox("Select a run", options=options)
     selected_id = int(selected.split("#")[1].split(" ")[0])
     row = df[df["id"] == selected_id].iloc[0]
+
+    st.info(f"🧭 **Model executed for this trial:** `{row['model'] or 'unknown (logged before model tracking was added)'}`")
 
     st.subheader("Prosecution Arguments")
     st.info(row["prosecution_summary"])
@@ -406,17 +469,17 @@ def render_history_tab() -> None:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    st.title("⚖️ Westeros Tribunal")
+    st.title("⚖️ Tribunal")
     st.caption(case_data.CASE_ID)
 
     if "last_result" not in st.session_state:
         st.session_state["last_result"] = None
 
-    api_key, model = render_sidebar()
+    api_key, model, random_mode = render_sidebar()
 
     tab_run, tab_history = st.tabs(["🏟️ Run Simulation", "📚 Historical Runs"])
     with tab_run:
-        render_run_tab(api_key, model)
+        render_run_tab(api_key, model, random_mode)
     with tab_history:
         render_history_tab()
 

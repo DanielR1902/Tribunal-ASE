@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS trial_runs (
     id                      INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp               TEXT    NOT NULL,
     architecture_mode       TEXT    NOT NULL,
+    model                   TEXT    NOT NULL DEFAULT '',
     prosecution_summary     TEXT    NOT NULL,
     defense_summary         TEXT    NOT NULL,
     judge_barak_reasoning   TEXT    NOT NULL,
@@ -69,7 +70,19 @@ def init_db(db_path: str | None = None) -> str:
     resolved_path = db_path or get_db_path()
     with _connect(resolved_path) as conn:
         conn.execute(SCHEMA)
+        _ensure_model_column(conn)
     return resolved_path
+
+
+def _ensure_model_column(conn: sqlite3.Connection) -> None:
+    """Migrate a pre-existing ``court_runs.db`` (from before OpenRouter
+    dynamic/random model selection was tracked) by adding the ``model``
+    column if it's missing. ``CREATE TABLE IF NOT EXISTS`` alone doesn't add
+    columns to an already-existing table.
+    """
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(trial_runs)")}
+    if "model" not in columns:
+        conn.execute("ALTER TABLE trial_runs ADD COLUMN model TEXT NOT NULL DEFAULT ''")
 
 
 @dataclass
@@ -77,6 +90,7 @@ class TrialRunRecord:
     """All fields required to log one completed tribunal run."""
 
     architecture_mode: str  # "single_agent" or "multi_agent"
+    model: str  # the exact OpenRouter model(s) executed for this run
     prosecution_summary: str
     defense_summary: str
     judge_barak_reasoning: str
@@ -103,18 +117,19 @@ def log_trial_run(record: TrialRunRecord, db_path: str | None = None) -> int:
         cursor = conn.execute(
             """
             INSERT INTO trial_runs (
-                timestamp, architecture_mode,
+                timestamp, architecture_mode, model,
                 prosecution_summary, defense_summary,
                 judge_barak_reasoning, judge_barak_verdict,
                 judge_elon_reasoning, judge_elon_verdict,
                 judge_shamgar_reasoning, judge_shamgar_verdict,
                 prompt_tokens, completion_tokens, total_tokens,
                 cost_usd, cost_ils, execution_time_sec
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 timestamp,
                 record.architecture_mode,
+                record.model,
                 record.prosecution_summary,
                 record.defense_summary,
                 record.judge_barak_reasoning,

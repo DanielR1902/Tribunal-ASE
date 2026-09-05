@@ -1,6 +1,6 @@
 """Single-Agent architecture for the Westeros Tribunal simulation.
 
-A single Gemini call is asked to play every advocate and every judge at
+A single OpenRouter call is asked to play every advocate and every judge at
 once, and to return the entire result as one structured (Pydantic-validated)
 JSON object. This is the "monolithic prompt" baseline that the multi-agent
 architecture in ``project_multi_agent`` is compared against.
@@ -17,8 +17,6 @@ from pathlib import Path
 from typing import Literal
 
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types
 from pydantic import BaseModel
 
 # Make the sibling `common` package importable whether this file is run as
@@ -31,11 +29,17 @@ if str(REPO_ROOT) not in sys.path:
 from common import case_data  # noqa: E402
 from common.cost_tracker import CostTracker, get_ils_exchange_rate  # noqa: E402
 from common.database import TrialRunRecord, init_db, log_trial_run  # noqa: E402
+from common.llm_client import (  # noqa: E402
+    USAGE_ACCOUNTING_EXTRA_BODY,
+    build_schema_instructions,
+    extract_usage,
+    get_client,
+    get_model,
+)
 from common.personas import ADVOCATE_PERSONAS, JUDGE_PERSONAS  # noqa: E402
 
 load_dotenv(REPO_ROOT / ".env")
 
-DEFAULT_MODEL = "gemini-3.6-flash"
 ARCHITECTURE_MODE = "single_agent"
 
 
@@ -119,7 +123,7 @@ YOUR TASK, in this exact order:
 Return ONLY the structured result matching the required schema. Do not
 merge the three judges' verdicts into a consensus; report each independently
 even if they conflict.
-"""
+""" + build_schema_instructions(TribunalVerdict)
 
 
 # ---------------------------------------------------------------------------
@@ -159,7 +163,11 @@ def print_budget_box(run_id: int, model: str, execution_time: float, tracker: Co
     rate = get_ils_exchange_rate()
     lines = [
         f"Architecture        : {ARCHITECTURE_MODE}",
-        f"Model               : {model}",
+        f"Requested model     : {model}",
+    ]
+    if tracker.executed_model_summary != model:
+        lines.append(f"Executed model      : {tracker.executed_model_summary}")
+    lines += [
         f"SQLite Run ID       : {run_id}  (court_runs.db, table trial_runs)",
         f"Execution time      : {execution_time:.2f} sec",
         f"Prompt tokens       : {tracker.prompt_tokens:,}",
@@ -181,47 +189,46 @@ def print_budget_box(run_id: int, model: str, execution_time: float, tracker: Co
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv("OPENROUTER_API_KEY")
     if not api_key:
         sys.exit(
-            "GEMINI_API_KEY is not set. Copy .env.example to .env at the "
-            "repository root and add your Gemini API key before running."
+            "OPENROUTER_API_KEY is not set. Copy .env.example to .env at the "
+            "repository root and add your OpenRouter API key before running."
         )
-    model = os.getenv("GEMINI_MODEL", DEFAULT_MODEL)
+    model = get_model()
 
-    client = genai.Client(api_key=api_key)
+    client = get_client(api_key)
     db_path = init_db()
     tracker = CostTracker(model=model)
 
     print(f"Running {case_data.CASE_ID} — single-agent architecture (model: {model})...")
 
     start = time.perf_counter()
-    response = client.models.generate_content(
+    response = client.chat.completions.create(
         model=model,
-        contents=build_prompt(),
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=TribunalVerdict,
-            temperature=0.7,
-        ),
+        messages=[{"role": "user", "content": build_prompt()}],
+        response_format={"type": "json_object"},
+        temperature=0.7,
+        extra_body=USAGE_ACCOUNTING_EXTRA_BODY,
     )
     execution_time = time.perf_counter() - start
 
-    verdict: TribunalVerdict | None = response.parsed
-    if verdict is None:
-        # Fall back to manual validation if the SDK could not auto-parse
-        # (e.g. an older SDK version) — response.text still holds the JSON.
-        verdict = TribunalVerdict.model_validate_json(response.text)
+    verdict = TribunalVerdict.model_validate_json(response.choices[0].message.content or "")
 
-    usage = response.usage_metadata
-    prompt_tokens = usage.prompt_token_count if usage else 0
-    completion_tokens = usage.candidates_token_count if usage else 0
-    tracker.record("single_call", prompt_tokens, completion_tokens)
+    prompt_tokens, completion_tokens, actual_cost, executed_model = extract_usage(response)
+    tracker.record(
+        "single_call",
+        prompt_tokens,
+        completion_tokens,
+        actual_cost_usd=actual_cost,
+        executed_model=executed_model,
+    )
 
     print_result(verdict)
 
     record = TrialRunRecord(
         architecture_mode=ARCHITECTURE_MODE,
+        model=tracker.executed_model_summary,
         prosecution_summary=verdict.prosecution_summary,
         defense_summary=verdict.defense_summary,
         judge_barak_reasoning=verdict.judge_barak.reasoning,

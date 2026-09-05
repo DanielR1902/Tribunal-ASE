@@ -1,8 +1,9 @@
 """Dedicated advocate and judge agent classes for the multi-agent architecture.
 
-Each agent wraps exactly one Gemini call and is responsible for a single
-persona. ``AdvocateAgent`` produces free-form spoken argument; ``JudgeAgent``
-produces a structured (Pydantic-validated) reasoning + verdict pair.
+Each agent wraps exactly one OpenRouter chat-completion call and is
+responsible for a single persona. ``AdvocateAgent`` produces free-form
+spoken argument; ``JudgeAgent`` produces a structured (Pydantic-validated)
+reasoning + verdict pair.
 """
 
 from __future__ import annotations
@@ -10,9 +11,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from google.genai import types
 from pydantic import BaseModel
 
+from common.llm_client import USAGE_ACCOUNTING_EXTRA_BODY, build_schema_instructions, extract_usage
 from common.personas import AdvocatePersona, JudgePersona
 
 Verdict = Literal["Justified", "Not Justified"]
@@ -25,11 +26,13 @@ class JudgeOpinion(BaseModel):
 
 @dataclass
 class CallResult:
-    """Raw text plus token accounting for a single Gemini API call."""
+    """Raw text plus token/cost accounting for a single OpenRouter call."""
 
     text: str
     prompt_tokens: int
     completion_tokens: int
+    cost_usd: float | None = None
+    executed_model: str | None = None
 
 
 class AdvocateAgent:
@@ -60,19 +63,23 @@ own voice and character, in 3 to 5 paragraphs. Ground every claim in the
 agreed facts above; do not invent facts that contradict them. Speak in the
 first person, as yourself, addressed to the tribunal.
 """
-        response = self.client.models.generate_content(
+        response = self.client.chat.completions.create(
             model=self.model,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=self.persona["persona"],
-                temperature=0.8,
-            ),
+            messages=[
+                {"role": "system", "content": self.persona["persona"]},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.8,
+            extra_body=USAGE_ACCOUNTING_EXTRA_BODY,
         )
-        usage = response.usage_metadata
+        text = (response.choices[0].message.content or "").strip()
+        prompt_tokens, completion_tokens, actual_cost, executed_model = extract_usage(response)
         return CallResult(
-            text=(response.text or "").strip(),
-            prompt_tokens=usage.prompt_token_count if usage else 0,
-            completion_tokens=usage.candidates_token_count if usage else 0,
+            text=text,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            cost_usd=actual_cost,
+            executed_model=executed_model,
         )
 
 
@@ -115,25 +122,26 @@ verdict must never be merged or averaged with theirs. Apply your own
 distinctive judicial method, exactly as described in your persona, to reach
 your own conclusion on the tribunal issue above. Provide step-by-step
 reasoning consistent with your method, then a single binary verdict.
-"""
-        response = self.client.models.generate_content(
+""" + build_schema_instructions(JudgeOpinion)
+        response = self.client.chat.completions.create(
             model=self.model,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=self.persona["persona"],
-                response_mime_type="application/json",
-                response_schema=JudgeOpinion,
-                temperature=0.4,
-            ),
+            messages=[
+                {"role": "system", "content": self.persona["persona"]},
+                {"role": "user", "content": prompt},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.4,
+            extra_body=USAGE_ACCOUNTING_EXTRA_BODY,
         )
-        opinion: JudgeOpinion | None = response.parsed
-        if opinion is None:
-            opinion = JudgeOpinion.model_validate_json(response.text)
+        content = response.choices[0].message.content or ""
+        opinion = JudgeOpinion.model_validate_json(content)
 
-        usage = response.usage_metadata
+        prompt_tokens, completion_tokens, actual_cost, executed_model = extract_usage(response)
         call_result = CallResult(
-            text=response.text or "",
-            prompt_tokens=usage.prompt_token_count if usage else 0,
-            completion_tokens=usage.candidates_token_count if usage else 0,
+            text=content,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            cost_usd=actual_cost,
+            executed_model=executed_model,
         )
         return opinion, call_result

@@ -1,7 +1,7 @@
 """Multi-Agent architecture for the Westeros Tribunal simulation.
 
 Four dedicated AdvocateAgent instances and three dedicated JudgeAgent
-instances each make their own independent Gemini call, coordinated by
+instances each make their own independent OpenRouter call, coordinated by
 ``TribunalOrchestrator``. This is compared against the single monolithic
 call in ``project_single_agent``.
 
@@ -16,7 +16,6 @@ import time
 from pathlib import Path
 
 from dotenv import load_dotenv
-from google import genai
 
 # Make the sibling `common` package (and this package's own absolute import
 # path) importable whether this file is run as `python -m
@@ -29,12 +28,12 @@ if str(REPO_ROOT) not in sys.path:
 from common import case_data  # noqa: E402
 from common.cost_tracker import CostTracker, get_ils_exchange_rate  # noqa: E402
 from common.database import TrialRunRecord, init_db, log_trial_run  # noqa: E402
+from common.llm_client import get_client, get_model  # noqa: E402
 from common.personas import JUDGE_PERSONAS  # noqa: E402
 from project_multi_agent.orchestrator import TribunalOrchestrator, TribunalResult  # noqa: E402
 
 load_dotenv(REPO_ROOT / ".env")
 
-DEFAULT_MODEL = "gemini-3.6-flash"
 ARCHITECTURE_MODE = "multi_agent"
 
 
@@ -70,7 +69,11 @@ def print_budget_box(run_id: int, model: str, execution_time: float, tracker: Co
     rate = get_ils_exchange_rate()
     lines = [
         f"Architecture        : {ARCHITECTURE_MODE}",
-        f"Model               : {model}",
+        f"Requested model     : {model}",
+    ]
+    if tracker.executed_model_summary != model:
+        lines.append(f"Executed model(s)   : {tracker.executed_model_summary}")
+    lines += [
         f"Agent calls made    : {len(tracker.calls)} (4 advocates + 3 judges)",
         f"SQLite Run ID       : {run_id}  (court_runs.db, table trial_runs)",
         f"Execution time      : {execution_time:.2f} sec",
@@ -90,7 +93,8 @@ def print_budget_box(run_id: int, model: str, execution_time: float, tracker: Co
     print("\nPer-call token breakdown:")
     for call in tracker.calls:
         print(
-            f"  - {call.label:<18} prompt={call.prompt_tokens:>6}  "
+            f"  - {call.label:<18} model={call.executed_model:<32} "
+            f"prompt={call.prompt_tokens:>6}  "
             f"completion={call.completion_tokens:>6}  "
             f"cost=${call.cost_usd:.6f}"
         )
@@ -101,15 +105,15 @@ def print_budget_box(run_id: int, model: str, execution_time: float, tracker: Co
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv("OPENROUTER_API_KEY")
     if not api_key:
         sys.exit(
-            "GEMINI_API_KEY is not set. Copy .env.example to .env at the "
-            "repository root and add your Gemini API key before running."
+            "OPENROUTER_API_KEY is not set. Copy .env.example to .env at the "
+            "repository root and add your OpenRouter API key before running."
         )
-    model = os.getenv("GEMINI_MODEL", DEFAULT_MODEL)
+    model = get_model()
 
-    client = genai.Client(api_key=api_key)
+    client = get_client(api_key)
     db_path = init_db()
     tracker = CostTracker(model=model)
 
@@ -128,6 +132,7 @@ def main() -> None:
 
     record = TrialRunRecord(
         architecture_mode=ARCHITECTURE_MODE,
+        model=tracker.executed_model_summary,
         prosecution_summary=result.prosecution_summary,
         defense_summary=result.defense_summary,
         judge_barak_reasoning=barak.reasoning,
