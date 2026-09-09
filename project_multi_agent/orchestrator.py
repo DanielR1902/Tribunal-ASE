@@ -58,17 +58,50 @@ class TribunalResult:
 class TribunalOrchestrator:
     """Builds all 7 agents and drives the courtroom workflow."""
 
-    def __init__(self, client, model: str, tracker: CostTracker) -> None:
+    def __init__(
+        self,
+        client,
+        tracker: CostTracker,
+        model: str | None = None,
+        models: dict[str, str] | None = None,
+    ) -> None:
+        """Every advocate/judge persona key needs a resolved engine before
+        any agent is built. ``models`` is an optional per-persona-key
+        engine override (Custom Agent mode in app.py) — e.g.
+        ``{"barak": "openai/gpt-4o-mini", ...}`` — which wins for a given
+        key when present; ``model`` is the shared fallback used for any
+        key ``models`` doesn't cover. Passing only ``model`` (every
+        single/multi-agent call site — ``models=None`` reproduces the
+        original single-engine behavior exactly) or only a fully-covering
+        ``models`` both work. ``client`` and ``tracker`` are positioned
+        first/second since every call site already passes all four
+        parameters as keywords, so this order is not a breaking change.
+
+        Leaving some role uncovered by *both* — no ``model`` and a
+        ``models`` dict missing that key — raises ``ValueError`` right
+        here, rather than deferring to an opaque failure the first time
+        that role's agent is actually used to call OpenRouter.
+        """
         self.client = client
         self.model = model
         self.tracker = tracker
+        self.models = models or {}
+
+        all_keys = list(ADVOCATE_PERSONAS) + list(JUDGE_PERSONAS)
+        unresolved = [key for key in all_keys if self.models.get(key, model) is None]
+        if unresolved:
+            raise ValueError(
+                "TribunalOrchestrator: no engine assigned for role(s) "
+                f"{', '.join(unresolved)} — pass `model` as a fallback, or "
+                "cover every role key in `models`."
+            )
 
         self.advocates: dict[str, AdvocateAgent] = {
-            key: AdvocateAgent(client, model, persona)
+            key: AdvocateAgent(client, self.models.get(key, model), persona)
             for key, persona in ADVOCATE_PERSONAS.items()
         }
         self.judges: dict[str, JudgeAgent] = {
-            key: JudgeAgent(client, model, persona)
+            key: JudgeAgent(client, self.models.get(key, model), persona)
             for key, persona in JUDGE_PERSONAS.items()
         }
 

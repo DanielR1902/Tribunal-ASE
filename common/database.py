@@ -47,7 +47,8 @@ CREATE TABLE IF NOT EXISTS trial_runs (
     total_tokens            INTEGER NOT NULL,
     cost_usd                REAL    NOT NULL,
     cost_ils                REAL    NOT NULL,
-    execution_time_sec      REAL    NOT NULL
+    execution_time_sec      REAL    NOT NULL,
+    role_models_json        TEXT    NOT NULL DEFAULT ''
 );
 """
 
@@ -71,6 +72,7 @@ def init_db(db_path: str | None = None) -> str:
     with _connect(resolved_path) as conn:
         conn.execute(SCHEMA)
         _ensure_model_column(conn)
+        _ensure_role_models_column(conn)
     return resolved_path
 
 
@@ -83,6 +85,19 @@ def _ensure_model_column(conn: sqlite3.Connection) -> None:
     columns = {row[1] for row in conn.execute("PRAGMA table_info(trial_runs)")}
     if "model" not in columns:
         conn.execute("ALTER TABLE trial_runs ADD COLUMN model TEXT NOT NULL DEFAULT ''")
+
+
+def _ensure_role_models_column(conn: sqlite3.Connection) -> None:
+    """Migrate a pre-existing ``court_runs.db`` (from before Custom-Agent
+    mode) by adding the ``role_models_json`` column if it's missing —
+    same pattern as ``_ensure_model_column`` above. Holds a JSON object
+    mapping each advocate/judge persona key to the specific engine it ran
+    on for a Custom-Agent run; empty string ('') for single/multi-agent
+    rows, which have no per-role assignment to record.
+    """
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(trial_runs)")}
+    if "role_models_json" not in columns:
+        conn.execute("ALTER TABLE trial_runs ADD COLUMN role_models_json TEXT NOT NULL DEFAULT ''")
 
 
 @dataclass
@@ -105,6 +120,13 @@ class TrialRunRecord:
     cost_usd: float
     cost_ils: float
     execution_time_sec: float
+    # JSON-encoded {persona_key: model} map for a Custom-Agent run; None
+    # (the default) for single/multi-agent runs, which use one shared
+    # model and have no per-role assignment to record. log_trial_run
+    # coerces None to '' at insert time, since the column itself is
+    # NOT NULL — callers (single/multi/custom-agent alike) can always pass
+    # None here without needing to know that storage detail.
+    role_models_json: str | None = None
 
 
 def log_trial_run(record: TrialRunRecord, db_path: str | None = None) -> int:
@@ -123,8 +145,8 @@ def log_trial_run(record: TrialRunRecord, db_path: str | None = None) -> int:
                 judge_elon_reasoning, judge_elon_verdict,
                 judge_shamgar_reasoning, judge_shamgar_verdict,
                 prompt_tokens, completion_tokens, total_tokens,
-                cost_usd, cost_ils, execution_time_sec
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                cost_usd, cost_ils, execution_time_sec, role_models_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 timestamp,
@@ -144,6 +166,7 @@ def log_trial_run(record: TrialRunRecord, db_path: str | None = None) -> int:
                 record.cost_usd,
                 record.cost_ils,
                 record.execution_time_sec,
+                record.role_models_json or "",
             ),
         )
         run_id = cursor.lastrowid
