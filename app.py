@@ -270,9 +270,24 @@ code, [data-testid="stMarkdownContainer"] code, .stCode, .engine-tag {
     border-radius: 10px;
     box-shadow: var(--trib-shadow);
 }
-[data-testid="stExpander"] summary {
+[data-testid="stExpander"] summary,
+[data-testid="stExpanderHeader"] {
+    background: #111827 !important;
+    border-color: #1E293B !important;
     font-weight: 600 !important;
-    color: var(--trib-text-heading) !important;
+    color: #E2E8F0 !important;
+}
+[data-testid="stExpander"] details > div,
+[data-testid="stExpanderDetails"] {
+    background: #0D131F !important;
+    border-top: 1px solid #1E293B !important;
+    color: #E2E8F0 !important;
+}
+[data-testid="stExpander"] summary svg,
+[data-testid="stExpanderHeader"] svg,
+[data-testid="stExpanderToggleIcon"] svg {
+    color: #94A3B8 !important;
+    fill: #94A3B8 !important;
 }
 
 [data-testid="stMetric"] {
@@ -296,9 +311,10 @@ code, [data-testid="stMarkdownContainer"] code, .stCode, .engine-tag {
 hr { border-color: var(--trib-border) !important; }
 
 /* Dropdowns: dark inputs, a crisp 1px hairline border, an indigo focus
-   glow on interaction. Best-effort coverage of BaseWeb's popover/menu
-   portal too, since the open dropdown list renders outside the normal
-   widget DOM. */
+   glow on interaction. BaseWeb renders the open menu in a portal appended
+   outside the normal widget DOM, so every portal container is targeted
+   explicitly (and forcefully, with both `background` and
+   `background-color`) rather than relying on inheritance. */
 [data-baseweb="select"] > div {
     background: #0D131F !important;
     border: 1px solid var(--trib-border) !important;
@@ -310,9 +326,78 @@ hr { border-color: var(--trib-border) !important; }
     border-color: var(--trib-indigo) !important;
     box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18) !important;
 }
-[data-baseweb="popover"], [data-baseweb="menu"] { background: var(--trib-panel-2) !important; }
-[role="listbox"] li, [role="option"] { color: var(--trib-text-body) !important; background: transparent !important; }
-[role="listbox"] li:hover, [role="option"]:hover { background: var(--trib-indigo-bg) !important; color: var(--trib-text-heading) !important; }
+
+/* Force dark background and styling on dropdown popovers and menus */
+div[data-baseweb="popover"],
+div[data-baseweb="popover"] > div,
+ul[data-baseweb="menu"],
+div[data-baseweb="select"] ul,
+[role="listbox"] {
+    background-color: #0F172A !important;
+    background: #0F172A !important;
+    border: 1px solid #1E293B !important;
+    border-radius: 8px !important;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.8) !important;
+    color: #E2E8F0 !important;
+}
+
+/* Force dark styling on every option/item */
+li[data-baseweb="menu-item"],
+[role="option"] {
+    background-color: transparent !important;
+    color: #CBD5E1 !important;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
+    font-size: 0.88rem !important;
+    padding: 10px 14px !important;
+    transition: background 0.15s ease, color 0.15s ease !important;
+}
+
+/* Hover and active states */
+li[data-baseweb="menu-item"]:hover,
+[role="option"]:hover,
+[role="option"][aria-selected="true"],
+li[data-baseweb="menu-item"][aria-selected="true"] {
+    background-color: #1E293B !important;
+    color: #38BDF8 !important;
+}
+
+/* Selectbox input wrapper when closed / idle */
+div[data-baseweb="select"] > div:first-child,
+div[data-testid="stSelectbox"] div[role="combobox"],
+div[data-testid="stSelectbox"] > div > div {
+    background-color: #111827 !important;
+    background: #111827 !important;
+    border: 1px solid #1E293B !important;
+    border-radius: 8px !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* Hover and focus states on the select input */
+div[data-baseweb="select"] > div:first-child:hover {
+    border-color: #38BDF8 !important;
+}
+
+div[data-baseweb="select"] > div:first-child:focus-within {
+    border-color: #6366F1 !important;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.25) !important;
+}
+
+/* Arrow / chevron icon only — background reset to transparent so it can
+   never render as a filled square, fill/stroke kept to a neutral slate
+   (independent of the selected-text color). */
+div[data-testid="stSelectbox"] svg {
+    background: transparent !important;
+    fill: #94A3B8 !important;
+    stroke: #94A3B8 !important;
+}
+
+/* Target strictly the text node of the selected item — never the icon
+   or its wrapper, so the chevron is unaffected by this color. */
+div[data-testid="stSelectbox"] [data-baseweb="select"] div[class*="singleValue"],
+div[data-testid="stSelectbox"] [data-baseweb="select"] div[class*="ValueContainer"] > div:not([data-baseweb="icon"]) {
+    color: #60A5FA !important;
+    font-weight: 500 !important;
+}
 
 /* Radio buttons: comfortable size, electric indigo on hover/selection. */
 [data-testid="stRadio"] label { font-size: 15px !important; }
